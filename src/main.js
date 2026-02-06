@@ -24,7 +24,8 @@ const PRESETS = {
       angleControl: 26,
       mediumRatio: 0.62,
       separation: 28,
-      wallRadius: 18,
+      wallWidth: 36,
+      wallHeight: 26,
       viewMode: 'top',
       showNodes: false
     }
@@ -49,7 +50,8 @@ const PRESETS = {
       angleControl: 26,
       mediumRatio: 0.62,
       separation: 28,
-      wallRadius: 18,
+      wallWidth: 36,
+      wallHeight: 26,
       viewMode: 'top',
       showNodes: false
     }
@@ -74,7 +76,8 @@ const PRESETS = {
       angleControl: 26,
       mediumRatio: 0.62,
       separation: 28,
-      wallRadius: 18,
+      wallWidth: 36,
+      wallHeight: 26,
       viewMode: 'top',
       showNodes: false
     }
@@ -99,7 +102,8 @@ const PRESETS = {
       angleControl: 24,
       mediumRatio: 0.62,
       separation: 28,
-      wallRadius: 18,
+      wallWidth: 36,
+      wallHeight: 26,
       viewMode: 'top',
       showNodes: false
     }
@@ -124,7 +128,8 @@ const PRESETS = {
       angleControl: 24,
       mediumRatio: 0.62,
       separation: 28,
-      wallRadius: 18,
+      wallWidth: 36,
+      wallHeight: 26,
       viewMode: 'top',
       showNodes: false
     }
@@ -149,7 +154,8 @@ const PRESETS = {
       angleControl: 24,
       mediumRatio: 0.6,
       separation: 28,
-      wallRadius: 18,
+      wallWidth: 36,
+      wallHeight: 26,
       viewMode: 'top',
       showNodes: false
     }
@@ -174,7 +180,8 @@ const PRESETS = {
       angleControl: 18,
       mediumRatio: 0.58,
       separation: 28,
-      wallRadius: 18,
+      wallWidth: 36,
+      wallHeight: 26,
       viewMode: 'top',
       showNodes: false
     }
@@ -199,7 +206,8 @@ const PRESETS = {
       angleControl: 24,
       mediumRatio: 0.62,
       separation: 34,
-      wallRadius: 18,
+      wallWidth: 36,
+      wallHeight: 26,
       viewMode: 'top',
       showNodes: true
     }
@@ -324,7 +332,8 @@ function createDefaultGeometryForPreset(presetId, defaults) {
         wall: {
           x: GRID_WIDTH * 0.56,
           y: GRID_HEIGHT * 0.5,
-          radius: defaults.wallRadius
+          width: defaults.wallWidth,
+          height: defaults.wallHeight
         }
       };
     case 'reflectionFlat':
@@ -478,6 +487,43 @@ class RippleTank {
         const dx = x - centerX;
         const dy = y - centerY;
         if (dx * dx + dy * dy <= r2) {
+          this.obstacle[this.index(x, y)] = 1;
+        }
+      }
+    }
+  }
+
+  setObstacleRoundedRect(centerX, centerY, width, height, cornerRadius = 2) {
+    const halfW = Math.max(1, width / 2);
+    const halfH = Math.max(1, height / 2);
+    const cr = Math.max(0, Math.min(cornerRadius, halfW, halfH));
+    const minX = Math.floor(centerX - halfW);
+    const maxX = Math.ceil(centerX + halfW);
+    const minY = Math.floor(centerY - halfH);
+    const maxY = Math.ceil(centerY + halfH);
+
+    for (let y = minY; y <= maxY; y += 1) {
+      for (let x = minX; x <= maxX; x += 1) {
+        if (!this.isInside(x, y)) {
+          continue;
+        }
+
+        const ax = Math.abs(x - centerX);
+        const ay = Math.abs(y - centerY);
+        if (ax > halfW || ay > halfH) {
+          continue;
+        }
+
+        const inCoreX = ax <= halfW - cr;
+        const inCoreY = ay <= halfH - cr;
+        if (inCoreX || inCoreY) {
+          this.obstacle[this.index(x, y)] = 1;
+          continue;
+        }
+
+        const dx = ax - (halfW - cr);
+        const dy = ay - (halfH - cr);
+        if (dx * dx + dy * dy <= cr * cr) {
           this.obstacle[this.index(x, y)] = 1;
         }
       }
@@ -687,8 +733,10 @@ const elements = {
   mediumRatioValue: document.getElementById('mediumRatioValue'),
   separation: document.getElementById('separation'),
   separationValue: document.getElementById('separationValue'),
-  wallRadius: document.getElementById('wallRadius'),
-  wallRadiusValue: document.getElementById('wallRadiusValue'),
+  wallWidth: document.getElementById('wallWidth'),
+  wallWidthValue: document.getElementById('wallWidthValue'),
+  wallHeight: document.getElementById('wallHeight'),
+  wallHeightValue: document.getElementById('wallHeightValue'),
   focusSourceBtn: document.getElementById('focusSourceBtn'),
   themeSelect: document.getElementById('themeSelect'),
   viewMode: document.getElementById('viewMode'),
@@ -720,13 +768,13 @@ const state = {
   preset: 'diffraction',
   theme: 'atlantic',
   viewMode: 'top',
-  running: true,
+  running: false,
   showNodes: false,
   reducedMotion: false,
   focusSourceMode: false,
   overlayLines: [],
   overlayPoints: [],
-  overlayCircles: [],
+  overlayRects: [],
   editHandles: [],
   hoveredHandleId: null,
   geometry: {},
@@ -754,15 +802,6 @@ function createTimestampParts() {
   const slug = iso.replace(/[:]/g, '-').replace(/\..+/, '').replace('T', '_');
   const readable = now.toLocaleString();
   return { now, slug, readable };
-}
-
-function escapeHtml(text) {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\"/g, '&quot;')
-    .replace(/'/g, '&#039;');
 }
 
 function downloadBlob(filename, blob) {
@@ -806,7 +845,7 @@ function buildSettingsList() {
     rows.push(`Slit width: ${elements.slitWidth.value}px`);
   }
   if (state.preset === 'diffractionWall') {
-    rows.push(`Wall radius: ${elements.wallRadius.value}px`);
+    rows.push(`Wall size: ${elements.wallWidth.value}px x ${elements.wallHeight.value}px`);
   }
   if (state.preset === 'reflectionDiagonal' || state.preset === 'refractionAngled') {
     rows.push(`Angle: ${elements.angleControl.value}deg`);
@@ -821,48 +860,87 @@ function buildSettingsList() {
   return rows;
 }
 
-function saveNotesReport() {
-  const notes = elements.labNotes.value.trim();
-  const screenshot = getCanvasDataUrl();
-  const { slug, readable } = createTimestampParts();
-  const settingsItems = buildSettingsList().map((item) => `<li>${escapeHtml(item)}</li>`).join('');
-  const notesHtml = notes ? escapeHtml(notes).replace(/\n/g, '<br />') : '<em>No notes entered.</em>';
+async function saveNotesDocx() {
+  const docxLib = window.docx;
+  if (!docxLib) {
+    elements.statusLine.textContent = 'DOCX export unavailable: failed to load docx library.';
+    return;
+  }
 
-  const html = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Ripple Lab Report</title>
-    <style>
-      body { font-family: Arial, sans-serif; margin: 1.5rem; color: #1f2933; }
-      h1, h2 { margin: 0 0 0.6rem; }
-      p, li { line-height: 1.45; }
-      .meta { color: #52606d; margin-bottom: 1rem; }
-      .shot { max-width: 100%; border: 1px solid #cbd2d9; border-radius: 10px; margin: 0.5rem 0 1rem; }
-      .card { border: 1px solid #d9e2ec; border-radius: 12px; padding: 0.9rem 1rem; margin-bottom: 1rem; }
-      ul { margin: 0.3rem 0 0; }
-    </style>
-  </head>
-  <body>
-    <h1>Ripple Lab Studio Notes</h1>
-    <p class="meta">Generated: ${escapeHtml(readable)}</p>
-    <div class="card">
-      <h2>Screenshot</h2>
-      <img class="shot" src="${screenshot}" alt="Ripple simulation screenshot" />
-    </div>
-    <div class="card">
-      <h2>Settings</h2>
-      <ul>${settingsItems}</ul>
-    </div>
-    <div class="card">
-      <h2>Student Notes</h2>
-      <p>${notesHtml}</p>
-    </div>
-  </body>
-</html>`;
+  const {
+    Document,
+    Packer,
+    Paragraph,
+    HeadingLevel,
+    TextRun,
+    ImageRun
+  } = docxLib;
 
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-  downloadBlob(`ripple-lab-report-${slug}.html`, blob);
+  try {
+    const notes = elements.labNotes.value.trim();
+    const screenshotDataUrl = getCanvasDataUrl();
+    const screenshotResponse = await fetch(screenshotDataUrl);
+    const screenshotBytes = new Uint8Array(await screenshotResponse.arrayBuffer());
+    const { slug, readable } = createTimestampParts();
+
+    const targetWidth = 620;
+    const targetHeight = Math.max(220, Math.round((elements.tankCanvas.height / elements.tankCanvas.width) * targetWidth));
+
+    const noteLines = notes.length > 0 ? notes.split(/\r?\n/) : ['No notes entered.'];
+    const settings = buildSettingsList();
+
+    const children = [
+      new Paragraph({
+        text: 'Ripple Lab Studio Notes',
+        heading: HeadingLevel.HEADING_1
+      }),
+      new Paragraph({
+        children: [new TextRun({ text: `Generated: ${readable}`, italics: true })]
+      }),
+      new Paragraph({
+        text: 'Screenshot',
+        heading: HeadingLevel.HEADING_2
+      }),
+      new Paragraph({
+        children: [
+          new ImageRun({
+            data: screenshotBytes,
+            transformation: { width: targetWidth, height: targetHeight }
+          })
+        ]
+      }),
+      new Paragraph({
+        text: 'Settings',
+        heading: HeadingLevel.HEADING_2
+      }),
+      ...settings.map(
+        (item) =>
+          new Paragraph({
+            text: item,
+            bullet: { level: 0 }
+          })
+      ),
+      new Paragraph({
+        text: 'Student Notes',
+        heading: HeadingLevel.HEADING_2
+      }),
+      ...noteLines.map((line) => new Paragraph({ text: line || ' ' }))
+    ];
+
+    const doc = new Document({
+      sections: [
+        {
+          children
+        }
+      ]
+    });
+
+    const blob = await Packer.toBlob(doc);
+    downloadBlob(`ripple-lab-report-${slug}.docx`, blob);
+  } catch (error) {
+    elements.statusLine.textContent = 'DOCX export failed. Try again.';
+    console.error(error);
+  }
 }
 
 function getPresetGeometry(presetId = state.preset) {
@@ -906,10 +984,15 @@ function syncGeometryFromControls() {
       break;
     }
     case 'diffractionWall':
-      geometry.wall.radius = clamp(
-        Number(elements.wallRadius.value),
-        Number(elements.wallRadius.min),
-        Number(elements.wallRadius.max)
+      geometry.wall.width = clamp(
+        Number(elements.wallWidth.value),
+        Number(elements.wallWidth.min),
+        Number(elements.wallWidth.max)
+      );
+      geometry.wall.height = clamp(
+        Number(elements.wallHeight.value),
+        Number(elements.wallHeight.min),
+        Number(elements.wallHeight.max)
       );
       break;
     case 'reflectionDiagonal':
@@ -974,12 +1057,18 @@ function syncControlsFromGeometry() {
   }
 
   if (state.preset === 'diffractionWall') {
-    const wallRadius = clamp(
-      Math.round(geometry.wall.radius),
-      Number(elements.wallRadius.min),
-      Number(elements.wallRadius.max)
+    const wallWidth = clamp(
+      Math.round(geometry.wall.width),
+      Number(elements.wallWidth.min),
+      Number(elements.wallWidth.max)
     );
-    elements.wallRadius.value = wallRadius;
+    const wallHeight = clamp(
+      Math.round(geometry.wall.height),
+      Number(elements.wallHeight.min),
+      Number(elements.wallHeight.max)
+    );
+    elements.wallWidth.value = wallWidth;
+    elements.wallHeight.value = wallHeight;
   }
 
   updateRangeLabels();
@@ -1028,7 +1117,8 @@ function updateRangeLabels() {
   elements.angleValue.textContent = `${elements.angleControl.value}°`;
   elements.mediumRatioValue.textContent = `${Math.round(Number(elements.mediumRatio.value) * 100)}%`;
   elements.separationValue.textContent = `${elements.separation.value} px`;
-  elements.wallRadiusValue.textContent = `${elements.wallRadius.value} px`;
+  elements.wallWidthValue.textContent = `${elements.wallWidth.value} px`;
+  elements.wallHeightValue.textContent = `${elements.wallHeight.value} px`;
 }
 
 function updateGuidePanel() {
@@ -1116,7 +1206,7 @@ function rebuildPresetGeometry() {
 
   state.overlayLines = [];
   state.overlayPoints = [];
-  state.overlayCircles = [];
+  state.overlayRects = [];
   state.editHandles = [];
 
   syncGeometryFromControls();
@@ -1234,11 +1324,14 @@ function setupDiffractionPreset(frequency, amplitude) {
 function setupDiffractionWallPreset(frequency, amplitude) {
   const geometry = getPresetGeometry();
   const wall = geometry.wall;
-  wall.x = clamp(wall.x, EDIT_MARGIN + 10, GRID_WIDTH - 1 - EDIT_MARGIN - 10);
-  wall.y = clamp(wall.y, EDIT_MARGIN + 10, GRID_HEIGHT - 1 - EDIT_MARGIN - 10);
-  wall.radius = clamp(wall.radius, Number(elements.wallRadius.min), Number(elements.wallRadius.max));
+  wall.width = clamp(wall.width, Number(elements.wallWidth.min), Number(elements.wallWidth.max));
+  wall.height = clamp(wall.height, Number(elements.wallHeight.min), Number(elements.wallHeight.max));
+  const halfW = wall.width / 2;
+  const halfH = wall.height / 2;
+  wall.x = clamp(wall.x, EDIT_MARGIN + halfW, GRID_WIDTH - 1 - EDIT_MARGIN - halfW);
+  wall.y = clamp(wall.y, EDIT_MARGIN + halfH, GRID_HEIGHT - 1 - EDIT_MARGIN - halfH);
 
-  tank.setObstacleDisk(wall.x, wall.y, wall.radius);
+  tank.setObstacleRoundedRect(wall.x, wall.y, wall.width, wall.height, 2.2);
 
   tank.addLineSource({
     x0: 6,
@@ -1251,24 +1344,26 @@ function setupDiffractionWallPreset(frequency, amplitude) {
     relativeAmplitude: 1
   });
 
-  state.overlayCircles.push({
+  state.overlayRects.push({
     x: wall.x,
     y: wall.y,
-    radius: wall.radius,
+    width: wall.width,
+    height: wall.height,
+    cornerRadius: 2.2,
     style: 'boundary'
   });
 
   addEditHandle({
-    id: 'diffraction-wall-center',
-    role: 'diffraction-wall-center',
+    id: 'diffraction-wall-box-move',
+    role: 'diffraction-wall-box-move',
     x: wall.x,
     y: wall.y
   });
   addEditHandle({
-    id: 'diffraction-wall-radius',
-    role: 'diffraction-wall-radius',
-    x: wall.x + wall.radius,
-    y: wall.y
+    id: 'diffraction-wall-box-size',
+    role: 'diffraction-wall-box-size',
+    x: wall.x + halfW,
+    y: wall.y + halfH
   });
 }
 
@@ -1514,7 +1609,8 @@ function applyPreset(presetId) {
   elements.angleControl.value = defaults.angleControl;
   elements.mediumRatio.value = defaults.mediumRatio;
   elements.separation.value = defaults.separation;
-  elements.wallRadius.value = defaults.wallRadius;
+  elements.wallWidth.value = defaults.wallWidth;
+  elements.wallHeight.value = defaults.wallHeight;
   elements.showNodes.checked = defaults.showNodes;
   elements.viewMode.value = defaults.viewMode || 'top';
 
@@ -1826,14 +1922,22 @@ function applyGeometryDrag(gridX, gridY) {
       start.slitTopY + MIN_SLIT_HEIGHT,
       GRID_HEIGHT - 1 - EDIT_MARGIN
     );
-  } else if (role === 'diffraction-wall-center') {
-    geometry.wall.x = clamp(start.wall.x + dx, EDIT_MARGIN + start.wall.radius, GRID_WIDTH - 1 - EDIT_MARGIN - start.wall.radius);
-    geometry.wall.y = clamp(start.wall.y + dy, EDIT_MARGIN + start.wall.radius, GRID_HEIGHT - 1 - EDIT_MARGIN - start.wall.radius);
-  } else if (role === 'diffraction-wall-radius') {
-    const nextRadius = Math.hypot(gridX - start.wall.x, gridY - start.wall.y);
-    geometry.wall.radius = clamp(nextRadius, Number(elements.wallRadius.min), Number(elements.wallRadius.max));
-    geometry.wall.x = clamp(start.wall.x, EDIT_MARGIN + geometry.wall.radius, GRID_WIDTH - 1 - EDIT_MARGIN - geometry.wall.radius);
-    geometry.wall.y = clamp(start.wall.y, EDIT_MARGIN + geometry.wall.radius, GRID_HEIGHT - 1 - EDIT_MARGIN - geometry.wall.radius);
+  } else if (role === 'diffraction-wall-box-move') {
+    const halfW = start.wall.width / 2;
+    const halfH = start.wall.height / 2;
+    geometry.wall.x = clamp(start.wall.x + dx, EDIT_MARGIN + halfW, GRID_WIDTH - 1 - EDIT_MARGIN - halfW);
+    geometry.wall.y = clamp(start.wall.y + dy, EDIT_MARGIN + halfH, GRID_HEIGHT - 1 - EDIT_MARGIN - halfH);
+  } else if (role === 'diffraction-wall-box-size') {
+    const nextHalfW = Math.abs(gridX - start.wall.x);
+    const nextHalfH = Math.abs(gridY - start.wall.y);
+    const maxHalfW = Math.min(start.wall.x - EDIT_MARGIN, GRID_WIDTH - 1 - EDIT_MARGIN - start.wall.x);
+    const maxHalfH = Math.min(start.wall.y - EDIT_MARGIN, GRID_HEIGHT - 1 - EDIT_MARGIN - start.wall.y);
+    geometry.wall.width = clamp(nextHalfW * 2, Number(elements.wallWidth.min), Math.min(Number(elements.wallWidth.max), maxHalfW * 2));
+    geometry.wall.height = clamp(
+      nextHalfH * 2,
+      Number(elements.wallHeight.min),
+      Math.min(Number(elements.wallHeight.max), maxHalfH * 2)
+    );
   } else if (role.startsWith('reflection-flat-line-')) {
     updateSegmentFromDrag(geometry.line, start.line, role, gridX, gridY, dx, dy);
   } else if (role.startsWith('reflection-diagonal-line-')) {
@@ -1912,17 +2016,49 @@ function renderOverlay(theme) {
     canvasCtx.stroke();
   }
 
-  for (let i = 0; i < state.overlayCircles.length; i += 1) {
-    const circle = state.overlayCircles[i];
-    const center = mapPoint(circle.x, circle.y);
-    const edge = mapPoint(circle.x + circle.radius, circle.y);
-    const radius = Math.max(2, Math.hypot(edge.x - center.x, edge.y - center.y));
+  for (let i = 0; i < state.overlayRects.length; i += 1) {
+    const rect = state.overlayRects[i];
+    const left = rect.x - rect.width / 2;
+    const right = rect.x + rect.width / 2;
+    const top = rect.y - rect.height / 2;
+    const bottom = rect.y + rect.height / 2;
 
     canvasCtx.strokeStyle = theme.line;
     canvasCtx.lineWidth = baseLineWidth * 2.2;
-    canvasCtx.beginPath();
-    canvasCtx.arc(center.x, center.y, radius, 0, TWO_PI);
-    canvasCtx.stroke();
+
+    if (is3D) {
+      const p1 = mapPoint(left, top);
+      const p2 = mapPoint(right, top);
+      const p3 = mapPoint(right, bottom);
+      const p4 = mapPoint(left, bottom);
+      canvasCtx.beginPath();
+      canvasCtx.moveTo(p1.x, p1.y);
+      canvasCtx.lineTo(p2.x, p2.y);
+      canvasCtx.lineTo(p3.x, p3.y);
+      canvasCtx.lineTo(p4.x, p4.y);
+      canvasCtx.closePath();
+      canvasCtx.stroke();
+    } else {
+      const radius = Math.max(2, rect.cornerRadius || 0);
+      const x = toCanvasX(left);
+      const y = toCanvasY(top);
+      const w = toCanvasX(right) - x;
+      const h = toCanvasY(bottom) - y;
+      const r = Math.min(radius, w / 2, h / 2);
+
+      canvasCtx.beginPath();
+      canvasCtx.moveTo(x + r, y);
+      canvasCtx.lineTo(x + w - r, y);
+      canvasCtx.quadraticCurveTo(x + w, y, x + w, y + r);
+      canvasCtx.lineTo(x + w, y + h - r);
+      canvasCtx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      canvasCtx.lineTo(x + r, y + h);
+      canvasCtx.quadraticCurveTo(x, y + h, x, y + h - r);
+      canvasCtx.lineTo(x, y + r);
+      canvasCtx.quadraticCurveTo(x, y, x + r, y);
+      canvasCtx.closePath();
+      canvasCtx.stroke();
+    }
   }
 
   for (let i = 0; i < state.overlayPoints.length; i += 1) {
@@ -2092,7 +2228,12 @@ function bindEvents() {
     state.needsRebuild = true;
   });
 
-  elements.wallRadius.addEventListener('input', () => {
+  elements.wallWidth.addEventListener('input', () => {
+    updateRangeLabels();
+    state.needsRebuild = true;
+  });
+
+  elements.wallHeight.addEventListener('input', () => {
     updateRangeLabels();
     state.needsRebuild = true;
   });
@@ -2110,7 +2251,7 @@ function bindEvents() {
   });
 
   elements.saveReportBtn.addEventListener('click', () => {
-    saveNotesReport();
+    saveNotesDocx();
   });
 
   elements.focusSourceBtn.addEventListener('click', () => {

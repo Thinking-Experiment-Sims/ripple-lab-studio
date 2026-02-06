@@ -33,7 +33,7 @@
         <section>
           <h2>Playback</h2>
           <div class="button-row">
-            <button id="playBtn" type="button">Pause</button>
+            <button id="playBtn" type="button">Play</button>
             <button id="stepBtn" type="button">Step</button>
             <button id="clearBtn" type="button">Clear Waves</button>
             <button id="resetBtn" type="button">Reset Preset</button>
@@ -79,8 +79,12 @@
             <input id="separation" type="range" min="8" max="72" step="1" />
           </label>
           <label class="field control-group" data-control="wall">
-            <span>Wall Radius <strong id="wallRadiusValue"></strong></span>
-            <input id="wallRadius" type="range" min="8" max="38" step="1" />
+            <span>Wall Width <strong id="wallWidthValue"></strong></span>
+            <input id="wallWidth" type="range" min="12" max="84" step="1" />
+          </label>
+          <label class="field control-group" data-control="wall">
+            <span>Wall Height <strong id="wallHeightValue"></strong></span>
+            <input id="wallHeight" type="range" min="12" max="84" step="1" />
           </label>
           <div class="field control-group" data-control="focus">
             <span>Parabola Focus Source</span>
@@ -115,7 +119,7 @@
           <h2>Export</h2>
           <div class="button-row">
             <button id="saveScreenshotBtn" type="button">Save Screenshot</button>
-            <button id="saveReportBtn" type="button">Download Notes Report</button>
+            <button id="saveReportBtn" type="button">Download Notes DOCX</button>
           </div>
         </section>
 
@@ -158,6 +162,7 @@
       Keyboard: <kbd>Space</kbd> play/pause, <kbd>R</kbd> clear waves, <kbd>S</kbd> save screenshot.
     </footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
     <script type="module" src="./main.js"></script>
   </body>
 </html>
