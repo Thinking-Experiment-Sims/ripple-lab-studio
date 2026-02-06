@@ -927,6 +927,10 @@ const state = {
   showNodes: false,
   reducedMotion: false,
   focusSourceMode: false,
+  camera: {
+    yaw: -0.2,
+    pitch: 0.9
+  },
   probe: {
     enabled: false,
     x: GRID_WIDTH * 0.62,
@@ -1570,7 +1574,7 @@ function updateStatus() {
   const probeText = state.probe.enabled ? ' | probe on' : '';
   const editState =
     state.viewMode === 'surface3d'
-      ? ' | 3D view (switch to top view to edit geometry)'
+      ? ' | 3D view (drag to rotate, switch to top view to edit geometry)'
       : state.drag
         ? ` | editing: ${state.drag.role}`
         : state.hoveredHandleId
@@ -2133,16 +2137,29 @@ function toCanvasY(gridY) {
 function project3DPoint(gridX, gridY, zValue = 0) {
   const w = elements.tankCanvas.width;
   const h = elements.tankCanvas.height;
-  const depthT = clamp(gridY / (GRID_HEIGHT - 1), 0, 1);
-  const perspective = 0.28 + depthT * 1.05;
-  const centerX = w * 0.5;
-  const horizon = h * 0.16;
-  const depth = h * 0.78;
-  const amplitudeScale = h * 0.13 * (1 - depthT * 0.35);
+  const nx = (gridX / (GRID_WIDTH - 1) - 0.5) * 2;
+  const nz = (gridY / (GRID_HEIGHT - 1) - 0.5) * 2;
+  const waveHeight = -zValue * 0.44;
+  const worldX = nx;
+  const worldY = waveHeight;
+  const worldZ = nz * 1.35;
+
+  const cosYaw = Math.cos(state.camera.yaw);
+  const sinYaw = Math.sin(state.camera.yaw);
+  const xYaw = worldX * cosYaw - worldZ * sinYaw;
+  const zYaw = worldX * sinYaw + worldZ * cosYaw;
+
+  const cosPitch = Math.cos(state.camera.pitch);
+  const sinPitch = Math.sin(state.camera.pitch);
+  const yPitch = worldY * cosPitch - zYaw * sinPitch;
+  const zPitch = worldY * sinPitch + zYaw * cosPitch;
+
+  const cameraDistance = 3.25;
+  const invPerspective = 1 / Math.max(0.35, zPitch + cameraDistance);
 
   return {
-    x: centerX + ((gridX - GRID_WIDTH * 0.5) / GRID_WIDTH) * w * perspective,
-    y: horizon + depth * depthT - zValue * amplitudeScale
+    x: w * 0.5 + xYaw * invPerspective * w * 0.78,
+    y: h * 0.54 + yPitch * invPerspective * h * 1.15
   };
 }
 
@@ -2599,7 +2616,7 @@ function bindEvents() {
     state.viewMode = elements.viewMode.value;
     state.drag = null;
     state.hoveredHandleId = null;
-    elements.tankCanvas.style.cursor = state.viewMode === 'surface3d' ? 'default' : 'crosshair';
+    elements.tankCanvas.style.cursor = state.viewMode === 'surface3d' ? 'grab' : 'crosshair';
   });
 
   elements.boundaryMode.addEventListener('change', () => {
@@ -2726,6 +2743,17 @@ function bindEvents() {
     state.pointer = { x: pointer.cellX, y: pointer.cellY };
     if (state.viewMode === 'surface3d') {
       state.hoveredHandleId = null;
+      state.drag = {
+        pointerId: event.pointerId,
+        role: 'camera-rotate',
+        startCanvasX: pointer.canvasX,
+        startCanvasY: pointer.canvasY,
+        startYaw: state.camera.yaw,
+        startPitch: state.camera.pitch
+      };
+      elements.tankCanvas.setPointerCapture(event.pointerId);
+      elements.tankCanvas.style.cursor = 'grabbing';
+      event.preventDefault();
       return;
     }
 
@@ -2766,7 +2794,16 @@ function bindEvents() {
 
     if (state.viewMode === 'surface3d') {
       state.hoveredHandleId = null;
-      elements.tankCanvas.style.cursor = 'default';
+      if (state.drag && state.drag.role === 'camera-rotate' && state.drag.pointerId === event.pointerId) {
+        const dx = pointer.canvasX - state.drag.startCanvasX;
+        const dy = pointer.canvasY - state.drag.startCanvasY;
+        const sensitivity = 0.0045;
+        state.camera.yaw = clamp(state.drag.startYaw + dx * sensitivity, -1.45, 1.45);
+        state.camera.pitch = clamp(state.drag.startPitch + dy * sensitivity, 0.24, 1.45);
+        elements.tankCanvas.style.cursor = 'grabbing';
+      } else {
+        elements.tankCanvas.style.cursor = 'grab';
+      }
       return;
     }
 
@@ -2798,6 +2835,10 @@ function bindEvents() {
       elements.tankCanvas.releasePointerCapture(event.pointerId);
     }
     state.drag = null;
+    if (state.viewMode === 'surface3d') {
+      elements.tankCanvas.style.cursor = 'grab';
+      return;
+    }
     const pointer = getCanvasPointerPosition(event);
     const handle = findEditHandleAtCanvas(pointer.canvasX, pointer.canvasY);
     const bodyRole = handle ? null : getPresetBodyDragRole(pointer.gridX, pointer.gridY);
