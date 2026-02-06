@@ -539,7 +539,9 @@ class RippleTank {
   }
 
   buildEdgeMask() {
-    const margin = 26;
+    // Keep a light absorbing sponge near edges without suppressing sources
+    // placed close to the border in several presets.
+    const margin = 12;
     for (let y = 0; y < this.height; y += 1) {
       for (let x = 0; x < this.width; x += 1) {
         const edgeDistance = Math.min(x, y, this.width - 1 - x, this.height - 1 - y);
@@ -548,7 +550,7 @@ class RippleTank {
           this.edgeMask[i] = 1;
         } else {
           const t = clamp(edgeDistance / margin, 0, 1);
-          this.edgeMask[i] = 0.08 + 0.92 * t * t;
+          this.edgeMask[i] = 0.88 + 0.12 * t * t;
         }
       }
     }
