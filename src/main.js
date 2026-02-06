@@ -1328,8 +1328,8 @@ function setupDiffractionWallPreset(frequency, amplitude) {
   wall.height = clamp(wall.height, Number(elements.wallHeight.min), Number(elements.wallHeight.max));
   const halfW = wall.width / 2;
   const halfH = wall.height / 2;
-  wall.x = clamp(wall.x, EDIT_MARGIN + halfW, GRID_WIDTH - 1 - EDIT_MARGIN - halfW);
-  wall.y = clamp(wall.y, EDIT_MARGIN + halfH, GRID_HEIGHT - 1 - EDIT_MARGIN - halfH);
+  wall.x = clamp(wall.x, 0, GRID_WIDTH - 1);
+  wall.y = clamp(wall.y, 0, GRID_HEIGHT - 1);
 
   tank.setObstacleRoundedRect(wall.x, wall.y, wall.width, wall.height, 2.2);
 
@@ -1858,6 +1858,31 @@ function findEditHandleAtCanvas(canvasX, canvasY) {
   return bestHandle;
 }
 
+function getPresetBodyDragRole(gridX, gridY) {
+  if (state.preset === 'diffractionWall') {
+    const geometry = getPresetGeometry();
+    const wall = geometry.wall;
+    const halfW = wall.width / 2;
+    const halfH = wall.height / 2;
+    if (gridX >= wall.x - halfW && gridX <= wall.x + halfW && gridY >= wall.y - halfH && gridY <= wall.y + halfH) {
+      return 'diffraction-wall-box-move';
+    }
+  }
+
+  if (state.preset === 'diffraction') {
+    const geometry = getPresetGeometry();
+    const wallX = geometry.wallX;
+    const onWallColumn = Math.abs(gridX - wallX) <= 2;
+    const inTopSegment = gridY <= geometry.slitTopY;
+    const inBottomSegment = gridY >= geometry.slitBottomY;
+    if (onWallColumn && (inTopSegment || inBottomSegment)) {
+      return 'diffraction-wall';
+    }
+  }
+
+  return null;
+}
+
 function assignSegment(target, source) {
   target.x0 = source.x0;
   target.y0 = source.y0;
@@ -1923,20 +1948,16 @@ function applyGeometryDrag(gridX, gridY) {
       GRID_HEIGHT - 1 - EDIT_MARGIN
     );
   } else if (role === 'diffraction-wall-box-move') {
-    const halfW = start.wall.width / 2;
-    const halfH = start.wall.height / 2;
-    geometry.wall.x = clamp(start.wall.x + dx, EDIT_MARGIN + halfW, GRID_WIDTH - 1 - EDIT_MARGIN - halfW);
-    geometry.wall.y = clamp(start.wall.y + dy, EDIT_MARGIN + halfH, GRID_HEIGHT - 1 - EDIT_MARGIN - halfH);
+    geometry.wall.x = clamp(start.wall.x + dx, 0, GRID_WIDTH - 1);
+    geometry.wall.y = clamp(start.wall.y + dy, 0, GRID_HEIGHT - 1);
   } else if (role === 'diffraction-wall-box-size') {
     const nextHalfW = Math.abs(gridX - start.wall.x);
     const nextHalfH = Math.abs(gridY - start.wall.y);
-    const maxHalfW = Math.min(start.wall.x - EDIT_MARGIN, GRID_WIDTH - 1 - EDIT_MARGIN - start.wall.x);
-    const maxHalfH = Math.min(start.wall.y - EDIT_MARGIN, GRID_HEIGHT - 1 - EDIT_MARGIN - start.wall.y);
-    geometry.wall.width = clamp(nextHalfW * 2, Number(elements.wallWidth.min), Math.min(Number(elements.wallWidth.max), maxHalfW * 2));
+    geometry.wall.width = clamp(nextHalfW * 2, Number(elements.wallWidth.min), Number(elements.wallWidth.max));
     geometry.wall.height = clamp(
       nextHalfH * 2,
       Number(elements.wallHeight.min),
-      Math.min(Number(elements.wallHeight.max), maxHalfH * 2)
+      Number(elements.wallHeight.max)
     );
   } else if (role.startsWith('reflection-flat-line-')) {
     updateSegmentFromDrag(geometry.line, start.line, role, gridX, gridY, dx, dy);
@@ -2278,14 +2299,17 @@ function bindEvents() {
     }
 
     const handle = findEditHandleAtCanvas(pointer.canvasX, pointer.canvasY);
+    const bodyRole = handle ? null : getPresetBodyDragRole(pointer.gridX, pointer.gridY);
     state.hoveredHandleId = handle ? handle.id : null;
 
-    if (handle) {
+    if (handle || bodyRole) {
+      const role = handle ? handle.role : bodyRole;
+      const handleId = handle ? handle.id : role;
       state.drag = {
         pointerId: event.pointerId,
         preset: state.preset,
-        handleId: handle.id,
-        role: handle.role,
+        handleId,
+        role,
         startGridX: pointer.gridX,
         startGridY: pointer.gridY,
         startGeometry: deepCopy(getPresetGeometry())
@@ -2313,8 +2337,9 @@ function bindEvents() {
     }
 
     const handle = findEditHandleAtCanvas(pointer.canvasX, pointer.canvasY);
+    const bodyRole = handle ? null : getPresetBodyDragRole(pointer.gridX, pointer.gridY);
     state.hoveredHandleId = handle ? handle.id : null;
-    elements.tankCanvas.style.cursor = handle ? 'grab' : 'crosshair';
+    elements.tankCanvas.style.cursor = handle || bodyRole ? 'grab' : 'crosshair';
   });
 
   const stopDrag = (event) => {
@@ -2326,7 +2351,11 @@ function bindEvents() {
       elements.tankCanvas.releasePointerCapture(event.pointerId);
     }
     state.drag = null;
-    elements.tankCanvas.style.cursor = state.hoveredHandleId ? 'grab' : 'crosshair';
+    const pointer = getCanvasPointerPosition(event);
+    const handle = findEditHandleAtCanvas(pointer.canvasX, pointer.canvasY);
+    const bodyRole = handle ? null : getPresetBodyDragRole(pointer.gridX, pointer.gridY);
+    state.hoveredHandleId = handle ? handle.id : null;
+    elements.tankCanvas.style.cursor = handle || bodyRole ? 'grab' : 'crosshair';
   };
 
   elements.tankCanvas.addEventListener('pointerup', stopDrag);
