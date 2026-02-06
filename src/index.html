@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ripple Lab Studio</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg-shape bg-shape-1" aria-hidden="true"></div>
+    <div class="bg-shape bg-shape-2" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Physics Lab Tool</p>
+        <h1>Ripple Lab Studio</h1>
+      </div>
+      <p class="subtitle">
+        Modern ripple tank simulation for diffraction, reflection, refraction, and interference.
+      </p>
+    </header>
+
+    <main class="layout">
+      <aside class="panel controls" aria-label="Simulation controls">
+        <section>
+          <h2>Scenario</h2>
+          <label class="field">
+            <span>Preset</span>
+            <select id="presetSelect"></select>
+          </label>
+        </section>
+
+        <section>
+          <h2>Playback</h2>
+          <div class="button-row">
+            <button id="playBtn" type="button">Pause</button>
+            <button id="stepBtn" type="button">Step</button>
+            <button id="clearBtn" type="button">Clear Waves</button>
+            <button id="resetBtn" type="button">Reset Preset</button>
+          </div>
+        </section>
+
+        <section>
+          <h2>Wave Settings</h2>
+          <label class="field">
+            <span>Frequency <strong id="frequencyValue"></strong></span>
+            <input id="frequency" type="range" min="0.5" max="8" step="0.1" />
+          </label>
+          <label class="field">
+            <span>Amplitude <strong id="amplitudeValue"></strong></span>
+            <input id="amplitude" type="range" min="0.05" max="1.5" step="0.05" />
+          </label>
+          <label class="field">
+            <span>Damping <strong id="dampingValue"></strong></span>
+            <input id="damping" type="range" min="0.985" max="0.999" step="0.001" />
+          </label>
+          <label class="field">
+            <span>Simulation Speed <strong id="speedValue"></strong></span>
+            <input id="speed" type="range" min="0.25" max="2" step="0.05" />
+          </label>
+        </section>
+
+        <section>
+          <h2>Geometry</h2>
+          <label class="field control-group" data-control="slit">
+            <span>Slit Width <strong id="slitWidthValue"></strong></span>
+            <input id="slitWidth" type="range" min="8" max="72" step="1" />
+          </label>
+          <label class="field control-group" data-control="angle">
+            <span><span id="angleText">Mirror Angle</span> <strong id="angleValue"></strong></span>
+            <input id="angleControl" type="range" min="-55" max="55" step="1" />
+          </label>
+          <label class="field control-group" data-control="medium">
+            <span>Shallow Medium Ratio <strong id="mediumRatioValue"></strong></span>
+            <input id="mediumRatio" type="range" min="0.45" max="1" step="0.01" />
+          </label>
+          <label class="field control-group" data-control="separation">
+            <span>Source Separation <strong id="separationValue"></strong></span>
+            <input id="separation" type="range" min="8" max="72" step="1" />
+          </label>
+          <div class="field control-group" data-control="focus">
+            <span>Parabola Focus Source</span>
+            <button id="focusSourceBtn" type="button">Use Focus Source</button>
+          </div>
+        </section>
+
+        <section>
+          <h2>Display</h2>
+          <label class="field">
+            <span>Color Theme</span>
+            <select id="themeSelect"></select>
+          </label>
+          <label class="toggle">
+            <input id="showNodes" type="checkbox" />
+            <span>Show estimated node lines</span>
+          </label>
+          <label class="toggle">
+            <input id="reducedMotion" type="checkbox" />
+            <span>Reduced motion mode</span>
+          </label>
+        </section>
+
+        <section class="metrics" aria-live="polite">
+          <h2>Predicted Values</h2>
+          <p id="metricDeep"></p>
+          <p id="metricShallow"></p>
+        </section>
+      </aside>
+
+      <section class="panel stage-panel" aria-label="Simulation viewport">
+        <div class="canvas-wrap">
+          <canvas id="tankCanvas" role="img" aria-label="Ripple tank wave field"></canvas>
+          <div class="hud" id="statusLine">Initializing simulation...</div>
+        </div>
+      </section>
+
+      <aside class="panel guide" aria-label="Lab guidance">
+        <section>
+          <h2 id="guideTitle"></h2>
+          <p id="guideConcept"></p>
+          <p id="guideGoal"></p>
+        </section>
+        <section>
+          <h3>What to Observe</h3>
+          <ul id="guideObservations"></ul>
+        </section>
+        <section>
+          <h3>Lab Notes</h3>
+          <textarea
+            id="labNotes"
+            placeholder="Capture observations, screenshots, and variable changes here..."
+          ></textarea>
+          <p class="hint">Tip: keep one variable fixed while changing another.</p>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="footer-note">
+      Keyboard: <kbd>Space</kbd> play/pause, <kbd>R</kbd> clear waves. Drag canvas handles to move/resize geometry.
+    </footer>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
