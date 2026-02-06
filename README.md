@@ -4,6 +4,7 @@ A modern, lab-ready ripple tank simulation built as a replacement for the Falsta
 
 This project is designed around your original activity flow:
 - Diffraction
+- Diffraction around an obstacle wall
 - Reflection (flat, diagonal, parabolic)
 - Refraction (boundary and angled boundary)
 - Interference (two coherent sources)
@@ -34,15 +35,19 @@ python3 -m http.server 8000
 
 - `Preset`: switches between lab phenomena.
 - `Pause / Step / Clear Waves / Reset Preset`: structured exploration workflow.
-- `Frequency, Amplitude, Damping, Simulation Speed`: wave behavior controls.
+- `Frequency, Amplitude, Damping Loss (0% allowed), Simulation Speed`: wave behavior controls.
 - Geometry controls appear only when relevant to the selected preset.
 - Direct manipulation: drag on-canvas handles to move and resize mirrors, slit openings, boundaries, and sources.
+- `View Mode`: top-down field view or 3D surface view.
 - `Show estimated node lines`: highlights stable destructive-interference bands.
 - `Reduced motion mode`: lowers visual intensity and frame rate.
+- `Save Screenshot`: downloads a PNG of the current simulation frame.
+- `Download Notes Report`: downloads an HTML document with screenshot, settings, and student notes.
 
 Keyboard shortcuts:
 - `Space`: Play/pause
 - `R`: Clear waves
+- `S`: Save screenshot
 
 ## Repository structure
 

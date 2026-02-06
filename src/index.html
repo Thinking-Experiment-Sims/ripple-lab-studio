@@ -51,8 +51,8 @@
             <input id="amplitude" type="range" min="0.05" max="1.5" step="0.05" />
           </label>
           <label class="field">
-            <span>Damping <strong id="dampingValue"></strong></span>
-            <input id="damping" type="range" min="0.985" max="0.999" step="0.001" />
+            <span>Damping Loss <strong id="dampingValue"></strong></span>
+            <input id="damping" type="range" min="0" max="0.03" step="0.001" />
           </label>
           <label class="field">
             <span>Simulation Speed <strong id="speedValue"></strong></span>
@@ -78,6 +78,10 @@
             <span>Source Separation <strong id="separationValue"></strong></span>
             <input id="separation" type="range" min="8" max="72" step="1" />
           </label>
+          <label class="field control-group" data-control="wall">
+            <span>Wall Radius <strong id="wallRadiusValue"></strong></span>
+            <input id="wallRadius" type="range" min="8" max="38" step="1" />
+          </label>
           <div class="field control-group" data-control="focus">
             <span>Parabola Focus Source</span>
             <button id="focusSourceBtn" type="button">Use Focus Source</button>
@@ -90,6 +94,13 @@
             <span>Color Theme</span>
             <select id="themeSelect"></select>
           </label>
+          <label class="field">
+            <span>View Mode</span>
+            <select id="viewMode">
+              <option value="top">Top View</option>
+              <option value="surface3d">3D Surface</option>
+            </select>
+          </label>
           <label class="toggle">
             <input id="showNodes" type="checkbox" />
             <span>Show estimated node lines</span>
@@ -98,6 +109,14 @@
             <input id="reducedMotion" type="checkbox" />
             <span>Reduced motion mode</span>
           </label>
+        </section>
+
+        <section>
+          <h2>Export</h2>
+          <div class="button-row">
+            <button id="saveScreenshotBtn" type="button">Save Screenshot</button>
+            <button id="saveReportBtn" type="button">Download Notes Report</button>
+          </div>
         </section>
 
         <section class="metrics" aria-live="polite">
@@ -136,7 +155,7 @@
     </main>
 
     <footer class="footer-note">
-      Keyboard: <kbd>Space</kbd> play/pause, <kbd>R</kbd> clear waves. Drag canvas handles to move/resize geometry.
+      Keyboard: <kbd>Space</kbd> play/pause, <kbd>R</kbd> clear waves, <kbd>S</kbd> save screenshot.
     </footer>
 
     <script type="module" src="./main.js"></script>

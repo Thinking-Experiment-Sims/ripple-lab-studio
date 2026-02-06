@@ -18,12 +18,39 @@ const PRESETS = {
     defaults: {
       frequency: 2.8,
       amplitude: 0.95,
-      damping: 0.996,
+      damping: 0.004,
       speed: 1,
       slitWidth: 28,
       angleControl: 26,
       mediumRatio: 0.62,
       separation: 28,
+      wallRadius: 18,
+      viewMode: 'top',
+      showNodes: false
+    }
+  },
+  diffractionWall: {
+    name: 'Diffraction Around a Wall',
+    concept:
+      'Waves bend around obstacle edges and create shadow regions with curved wavefronts behind the barrier.',
+    goal: 'Move and resize the wall and compare shadow width versus wave frequency.',
+    observations: [
+      'Look directly behind the wall and identify shadow and edge-bending regions.',
+      'Increase frequency and compare how far the wave wraps around the obstacle.',
+      'Drag the wall radius larger and smaller to compare diffraction strength.'
+    ],
+    controls: ['wall'],
+    defaults: {
+      frequency: 2.8,
+      amplitude: 0.95,
+      damping: 0.004,
+      speed: 1,
+      slitWidth: 28,
+      angleControl: 26,
+      mediumRatio: 0.62,
+      separation: 28,
+      wallRadius: 18,
+      viewMode: 'top',
       showNodes: false
     }
   },
@@ -41,12 +68,14 @@ const PRESETS = {
     defaults: {
       frequency: 3.2,
       amplitude: 0.88,
-      damping: 0.996,
+      damping: 0.004,
       speed: 1,
       slitWidth: 28,
       angleControl: 26,
       mediumRatio: 0.62,
       separation: 28,
+      wallRadius: 18,
+      viewMode: 'top',
       showNodes: false
     }
   },
@@ -64,12 +93,14 @@ const PRESETS = {
     defaults: {
       frequency: 3.1,
       amplitude: 0.88,
-      damping: 0.996,
+      damping: 0.004,
       speed: 1,
       slitWidth: 28,
       angleControl: 24,
       mediumRatio: 0.62,
       separation: 28,
+      wallRadius: 18,
+      viewMode: 'top',
       showNodes: false
     }
   },
@@ -87,12 +118,14 @@ const PRESETS = {
     defaults: {
       frequency: 2.7,
       amplitude: 0.9,
-      damping: 0.997,
+      damping: 0.003,
       speed: 1,
       slitWidth: 28,
       angleControl: 24,
       mediumRatio: 0.62,
       separation: 28,
+      wallRadius: 18,
+      viewMode: 'top',
       showNodes: false
     }
   },
@@ -110,12 +143,14 @@ const PRESETS = {
     defaults: {
       frequency: 2.5,
       amplitude: 0.9,
-      damping: 0.996,
+      damping: 0.004,
       speed: 1,
       slitWidth: 28,
       angleControl: 24,
       mediumRatio: 0.6,
       separation: 28,
+      wallRadius: 18,
+      viewMode: 'top',
       showNodes: false
     }
   },
@@ -133,12 +168,14 @@ const PRESETS = {
     defaults: {
       frequency: 2.9,
       amplitude: 0.9,
-      damping: 0.996,
+      damping: 0.004,
       speed: 1,
       slitWidth: 28,
       angleControl: 18,
       mediumRatio: 0.58,
       separation: 28,
+      wallRadius: 18,
+      viewMode: 'top',
       showNodes: false
     }
   },
@@ -156,12 +193,14 @@ const PRESETS = {
     defaults: {
       frequency: 4,
       amplitude: 0.92,
-      damping: 0.997,
+      damping: 0.003,
       speed: 1,
       slitWidth: 28,
       angleControl: 24,
       mediumRatio: 0.62,
       separation: 34,
+      wallRadius: 18,
+      viewMode: 'top',
       showNodes: true
     }
   }
@@ -280,6 +319,14 @@ function createDefaultGeometryForPreset(presetId, defaults) {
         slitBottomY: centerY + halfGap
       };
     }
+    case 'diffractionWall':
+      return {
+        wall: {
+          x: GRID_WIDTH * 0.56,
+          y: GRID_HEIGHT * 0.5,
+          radius: defaults.wallRadius
+        }
+      };
     case 'reflectionFlat':
       return {
         line: {
@@ -329,7 +376,7 @@ class RippleTank {
     this.height = height;
     this.size = width * height;
     this.baseSpeed = 0.34;
-    this.damping = 0.996;
+    this.dampingLoss = 0.004;
     this.time = 0;
 
     this.prev = new Float32Array(this.size);
@@ -417,9 +464,14 @@ class RippleTank {
   }
 
   setObstacleDisk(centerX, centerY, radius) {
-    const r2 = radius * radius;
-    for (let y = centerY - radius; y <= centerY + radius; y += 1) {
-      for (let x = centerX - radius; x <= centerX + radius; x += 1) {
+    const r = Math.max(0.5, radius);
+    const r2 = r * r;
+    const minX = Math.floor(centerX - r);
+    const maxX = Math.ceil(centerX + r);
+    const minY = Math.floor(centerY - r);
+    const maxY = Math.ceil(centerY + r);
+    for (let y = minY; y <= maxY; y += 1) {
+      for (let x = minX; x <= maxX; x += 1) {
         if (!this.isInside(x, y)) {
           continue;
         }
@@ -469,43 +521,29 @@ class RippleTank {
 
   collectLineIndices(x0, y0, x1, y1, thickness = 0) {
     const indices = new Set();
-    let startX = Math.round(x0);
-    let startY = Math.round(y0);
-    const endX = Math.round(x1);
-    const endY = Math.round(y1);
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const length = Math.hypot(dx, dy);
+    const samples = Math.max(1, Math.ceil(length * 2));
+    const brushRadius = Math.max(0.5, thickness);
+    const ir = Math.ceil(brushRadius);
 
-    const dx = Math.abs(endX - startX);
-    const sx = startX < endX ? 1 : -1;
-    const dy = -Math.abs(endY - startY);
-    const sy = startY < endY ? 1 : -1;
-    let err = dx + dy;
+    for (let s = 0; s <= samples; s += 1) {
+      const t = s / samples;
+      const cx = x0 + dx * t;
+      const cy = y0 + dy * t;
 
-    while (true) {
-      for (let oy = -thickness; oy <= thickness; oy += 1) {
-        for (let ox = -thickness; ox <= thickness; ox += 1) {
-          if (ox * ox + oy * oy > thickness * thickness) {
+      for (let oy = -ir; oy <= ir; oy += 1) {
+        for (let ox = -ir; ox <= ir; ox += 1) {
+          if (ox * ox + oy * oy > brushRadius * brushRadius) {
             continue;
           }
-          const x = startX + ox;
-          const y = startY + oy;
+          const x = Math.round(cx + ox);
+          const y = Math.round(cy + oy);
           if (this.isInside(x, y)) {
             indices.add(this.index(x, y));
           }
         }
-      }
-
-      if (startX === endX && startY === endY) {
-        break;
-      }
-
-      const e2 = 2 * err;
-      if (e2 >= dy) {
-        err += dy;
-        startX += sx;
-      }
-      if (e2 <= dx) {
-        err += dx;
-        startY += sy;
       }
     }
 
@@ -589,7 +627,7 @@ class RippleTank {
     const medium = this.medium;
     const obstacle = this.obstacle;
     const edgeMask = this.edgeMask;
-    const damping = this.damping;
+    const damping = clamp(1 - this.dampingLoss, 0, 1);
 
     for (let y = 1; y < height - 1; y += 1) {
       const row = y * width;
@@ -649,10 +687,15 @@ const elements = {
   mediumRatioValue: document.getElementById('mediumRatioValue'),
   separation: document.getElementById('separation'),
   separationValue: document.getElementById('separationValue'),
+  wallRadius: document.getElementById('wallRadius'),
+  wallRadiusValue: document.getElementById('wallRadiusValue'),
   focusSourceBtn: document.getElementById('focusSourceBtn'),
   themeSelect: document.getElementById('themeSelect'),
+  viewMode: document.getElementById('viewMode'),
   showNodes: document.getElementById('showNodes'),
   reducedMotion: document.getElementById('reducedMotion'),
+  saveScreenshotBtn: document.getElementById('saveScreenshotBtn'),
+  saveReportBtn: document.getElementById('saveReportBtn'),
   metricDeep: document.getElementById('metricDeep'),
   metricShallow: document.getElementById('metricShallow'),
   statusLine: document.getElementById('statusLine'),
@@ -676,12 +719,14 @@ const imageData = offscreenCtx.createImageData(GRID_WIDTH, GRID_HEIGHT);
 const state = {
   preset: 'diffraction',
   theme: 'atlantic',
+  viewMode: 'top',
   running: true,
   showNodes: false,
   reducedMotion: false,
   focusSourceMode: false,
   overlayLines: [],
   overlayPoints: [],
+  overlayCircles: [],
   editHandles: [],
   hoveredHandleId: null,
   geometry: {},
@@ -701,6 +746,123 @@ function formatNumber(value, places = 2) {
 
 function normalizeAngle(degrees) {
   return (degrees * Math.PI) / 180;
+}
+
+function createTimestampParts() {
+  const now = new Date();
+  const iso = now.toISOString();
+  const slug = iso.replace(/[:]/g, '-').replace(/\..+/, '').replace('T', '_');
+  const readable = now.toLocaleString();
+  return { now, slug, readable };
+}
+
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function getCanvasDataUrl() {
+  return elements.tankCanvas.toDataURL('image/png');
+}
+
+function saveScreenshot() {
+  const { slug } = createTimestampParts();
+  const dataUrl = getCanvasDataUrl();
+  const link = document.createElement('a');
+  link.href = dataUrl;
+  link.download = `ripple-screenshot-${slug}.png`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function buildSettingsList() {
+  const rows = [
+    `Preset: ${PRESETS[state.preset].name}`,
+    `View: ${state.viewMode === 'surface3d' ? '3D Surface' : 'Top View'}`,
+    `Frequency: ${elements.frequency.value} Hz`,
+    `Amplitude: ${elements.amplitude.value}`,
+    `Damping loss: ${(Number(elements.damping.value) * 100).toFixed(1)}%`,
+    `Simulation speed: ${elements.speed.value}x`,
+    `Theme: ${THEMES[state.theme].name}`
+  ];
+
+  if (state.preset === 'diffraction') {
+    rows.push(`Slit width: ${elements.slitWidth.value}px`);
+  }
+  if (state.preset === 'diffractionWall') {
+    rows.push(`Wall radius: ${elements.wallRadius.value}px`);
+  }
+  if (state.preset === 'reflectionDiagonal' || state.preset === 'refractionAngled') {
+    rows.push(`Angle: ${elements.angleControl.value}deg`);
+  }
+  if (state.preset === 'refractionBoundary' || state.preset === 'refractionAngled') {
+    rows.push(`Shallow medium ratio: ${elements.mediumRatio.value}`);
+  }
+  if (state.preset === 'interference') {
+    rows.push(`Source separation: ${elements.separation.value}px`);
+  }
+
+  return rows;
+}
+
+function saveNotesReport() {
+  const notes = elements.labNotes.value.trim();
+  const screenshot = getCanvasDataUrl();
+  const { slug, readable } = createTimestampParts();
+  const settingsItems = buildSettingsList().map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+  const notesHtml = notes ? escapeHtml(notes).replace(/\n/g, '<br />') : '<em>No notes entered.</em>';
+
+  const html = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Ripple Lab Report</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 1.5rem; color: #1f2933; }
+      h1, h2 { margin: 0 0 0.6rem; }
+      p, li { line-height: 1.45; }
+      .meta { color: #52606d; margin-bottom: 1rem; }
+      .shot { max-width: 100%; border: 1px solid #cbd2d9; border-radius: 10px; margin: 0.5rem 0 1rem; }
+      .card { border: 1px solid #d9e2ec; border-radius: 12px; padding: 0.9rem 1rem; margin-bottom: 1rem; }
+      ul { margin: 0.3rem 0 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Ripple Lab Studio Notes</h1>
+    <p class="meta">Generated: ${escapeHtml(readable)}</p>
+    <div class="card">
+      <h2>Screenshot</h2>
+      <img class="shot" src="${screenshot}" alt="Ripple simulation screenshot" />
+    </div>
+    <div class="card">
+      <h2>Settings</h2>
+      <ul>${settingsItems}</ul>
+    </div>
+    <div class="card">
+      <h2>Student Notes</h2>
+      <p>${notesHtml}</p>
+    </div>
+  </body>
+</html>`;
+
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  downloadBlob(`ripple-lab-report-${slug}.html`, blob);
 }
 
 function getPresetGeometry(presetId = state.preset) {
@@ -743,6 +905,13 @@ function syncGeometryFromControls() {
       geometry.wallX = clamp(Math.round(geometry.wallX), EDIT_MARGIN + 8, GRID_WIDTH - 1 - EDIT_MARGIN - 8);
       break;
     }
+    case 'diffractionWall':
+      geometry.wall.radius = clamp(
+        Number(elements.wallRadius.value),
+        Number(elements.wallRadius.min),
+        Number(elements.wallRadius.max)
+      );
+      break;
     case 'reflectionDiagonal':
       setSegmentAngleAroundMidpoint(geometry.line, Number(elements.angleControl.value));
       break;
@@ -804,6 +973,15 @@ function syncControlsFromGeometry() {
     elements.separation.value = separation;
   }
 
+  if (state.preset === 'diffractionWall') {
+    const wallRadius = clamp(
+      Math.round(geometry.wall.radius),
+      Number(elements.wallRadius.min),
+      Number(elements.wallRadius.max)
+    );
+    elements.wallRadius.value = wallRadius;
+  }
+
   updateRangeLabels();
 }
 
@@ -844,12 +1022,13 @@ function populateSelects() {
 function updateRangeLabels() {
   elements.frequencyValue.textContent = `${formatNumber(elements.frequency.value, 1)} Hz`;
   elements.amplitudeValue.textContent = formatNumber(elements.amplitude.value, 2);
-  elements.dampingValue.textContent = formatNumber(elements.damping.value, 3);
+  elements.dampingValue.textContent = `${formatNumber(Number(elements.damping.value) * 100, 1)}%`;
   elements.speedValue.textContent = `${formatNumber(elements.speed.value, 2)}x`;
   elements.slitWidthValue.textContent = `${elements.slitWidth.value} px`;
   elements.angleValue.textContent = `${elements.angleControl.value}°`;
   elements.mediumRatioValue.textContent = `${Math.round(Number(elements.mediumRatio.value) * 100)}%`;
   elements.separationValue.textContent = `${elements.separation.value} px`;
+  elements.wallRadiusValue.textContent = `${elements.wallRadius.value} px`;
 }
 
 function updateGuidePanel() {
@@ -905,8 +1084,16 @@ function updateMetrics() {
 
 function updateStatus() {
   const stateText = state.running ? 'running' : 'paused';
-  const editState = state.drag ? ` | editing: ${state.drag.role}` : state.hoveredHandleId ? ' | drag handles to move/resize' : '';
-  const base = `${PRESETS[state.preset].name} | ${stateText}${editState}`;
+  const modeText = state.viewMode === 'surface3d' ? '3D' : 'top';
+  const editState =
+    state.viewMode === 'surface3d'
+      ? ' | 3D view (switch to top view to edit geometry)'
+      : state.drag
+        ? ` | editing: ${state.drag.role}`
+        : state.hoveredHandleId
+          ? ' | drag handles to move/resize'
+          : '';
+  const base = `${PRESETS[state.preset].name} | ${stateText} | ${modeText}${editState}`;
   if (!state.pointer) {
     elements.statusLine.textContent = base;
     return;
@@ -925,10 +1112,11 @@ function rebuildPresetGeometry() {
 
   tank.clearEnvironment();
   tank.clearWaves();
-  tank.damping = Number(elements.damping.value);
+  tank.dampingLoss = Number(elements.damping.value);
 
   state.overlayLines = [];
   state.overlayPoints = [];
+  state.overlayCircles = [];
   state.editHandles = [];
 
   syncGeometryFromControls();
@@ -936,6 +1124,9 @@ function rebuildPresetGeometry() {
   switch (state.preset) {
     case 'diffraction':
       setupDiffractionPreset(frequency, amplitude);
+      break;
+    case 'diffractionWall':
+      setupDiffractionWallPreset(frequency, amplitude);
       break;
     case 'reflectionFlat':
       setupReflectionFlatPreset(frequency, amplitude);
@@ -1040,6 +1231,47 @@ function setupDiffractionPreset(frequency, amplitude) {
   });
 }
 
+function setupDiffractionWallPreset(frequency, amplitude) {
+  const geometry = getPresetGeometry();
+  const wall = geometry.wall;
+  wall.x = clamp(wall.x, EDIT_MARGIN + 10, GRID_WIDTH - 1 - EDIT_MARGIN - 10);
+  wall.y = clamp(wall.y, EDIT_MARGIN + 10, GRID_HEIGHT - 1 - EDIT_MARGIN - 10);
+  wall.radius = clamp(wall.radius, Number(elements.wallRadius.min), Number(elements.wallRadius.max));
+
+  tank.setObstacleDisk(wall.x, wall.y, wall.radius);
+
+  tank.addLineSource({
+    x0: 6,
+    y0: 6,
+    x1: 6,
+    y1: GRID_HEIGHT - 7,
+    thickness: 1,
+    frequency,
+    amplitude,
+    relativeAmplitude: 1
+  });
+
+  state.overlayCircles.push({
+    x: wall.x,
+    y: wall.y,
+    radius: wall.radius,
+    style: 'boundary'
+  });
+
+  addEditHandle({
+    id: 'diffraction-wall-center',
+    role: 'diffraction-wall-center',
+    x: wall.x,
+    y: wall.y
+  });
+  addEditHandle({
+    id: 'diffraction-wall-radius',
+    role: 'diffraction-wall-radius',
+    x: wall.x + wall.radius,
+    y: wall.y
+  });
+}
+
 function setupReflectionFlatPreset(frequency, amplitude) {
   const geometry = getPresetGeometry();
   const line = clampSegmentToBounds(geometry.line);
@@ -1062,7 +1294,7 @@ function setupReflectionFlatPreset(frequency, amplitude) {
     y0: line.y0,
     x1: line.x1,
     y1: line.y1,
-    style: 'boundary'
+    style: 'mirror'
   });
 
   addLineEditHandles('reflection-flat-line', line);
@@ -1085,7 +1317,7 @@ function setupReflectionDiagonalPreset(frequency, amplitude) {
     relativeAmplitude: 1
   });
 
-  state.overlayLines.push({ x0: line.x0, y0: line.y0, x1: line.x1, y1: line.y1, style: 'boundary' });
+  state.overlayLines.push({ x0: line.x0, y0: line.y0, x1: line.x1, y1: line.y1, style: 'mirror' });
   addLineEditHandles('reflection-diagonal-line', line);
 }
 
@@ -1149,7 +1381,7 @@ function setupParabolicPreset(frequency, amplitude) {
       continue;
     }
     if (previous) {
-      state.overlayLines.push({ x0: previous.x, y0: previous.y, x1: x, y1: y, style: 'boundary' });
+      state.overlayLines.push({ x0: previous.x, y0: previous.y, x1: x, y1: y, style: 'mirror' });
     }
     previous = { x, y };
   }
@@ -1282,9 +1514,12 @@ function applyPreset(presetId) {
   elements.angleControl.value = defaults.angleControl;
   elements.mediumRatio.value = defaults.mediumRatio;
   elements.separation.value = defaults.separation;
+  elements.wallRadius.value = defaults.wallRadius;
   elements.showNodes.checked = defaults.showNodes;
+  elements.viewMode.value = defaults.viewMode || 'top';
 
   state.showNodes = defaults.showNodes;
+  state.viewMode = defaults.viewMode || 'top';
   state.focusSourceMode = false;
   elements.focusSourceBtn.classList.remove('is-active');
   elements.focusSourceBtn.textContent = 'Use Focus Source';
@@ -1309,6 +1544,11 @@ function updateCanvasSize() {
 
 function renderField() {
   const theme = THEMES[state.theme];
+  if (state.viewMode === 'surface3d') {
+    render3DSurface(theme);
+    return;
+  }
+
   const data = imageData.data;
   const current = tank.curr;
   const medium = tank.medium;
@@ -1394,6 +1634,79 @@ function toCanvasX(gridX) {
 
 function toCanvasY(gridY) {
   return ((gridY + 0.5) / GRID_HEIGHT) * elements.tankCanvas.height;
+}
+
+function project3DPoint(gridX, gridY, zValue = 0) {
+  const w = elements.tankCanvas.width;
+  const h = elements.tankCanvas.height;
+  const depthT = clamp(gridY / (GRID_HEIGHT - 1), 0, 1);
+  const perspective = 0.28 + depthT * 1.05;
+  const centerX = w * 0.5;
+  const horizon = h * 0.16;
+  const depth = h * 0.78;
+  const amplitudeScale = h * 0.13 * (1 - depthT * 0.35);
+
+  return {
+    x: centerX + ((gridX - GRID_WIDTH * 0.5) / GRID_WIDTH) * w * perspective,
+    y: horizon + depth * depthT - zValue * amplitudeScale
+  };
+}
+
+function render3DSurface(theme) {
+  const w = elements.tankCanvas.width;
+  const h = elements.tankCanvas.height;
+  const current = tank.curr;
+
+  const gradient = canvasCtx.createLinearGradient(0, 0, 0, h);
+  gradient.addColorStop(0, 'rgba(3, 13, 19, 1)');
+  gradient.addColorStop(0.42, `rgba(${theme.bgDeep[0]}, ${theme.bgDeep[1]}, ${theme.bgDeep[2]}, 1)`);
+  gradient.addColorStop(1, `rgba(${theme.bgShallow[0]}, ${theme.bgShallow[1]}, ${theme.bgShallow[2]}, 1)`);
+  canvasCtx.fillStyle = gradient;
+  canvasCtx.fillRect(0, 0, w, h);
+
+  canvasCtx.save();
+  canvasCtx.lineCap = 'round';
+  canvasCtx.lineJoin = 'round';
+
+  for (let y = 0; y < GRID_HEIGHT; y += 2) {
+    const t = y / (GRID_HEIGHT - 1);
+    const alpha = 0.12 + t * 0.62;
+    const mix = 0.2 + t * 0.7;
+    const lineColorR = theme.trough[0] + (theme.crest[0] - theme.trough[0]) * mix;
+    const lineColorG = theme.trough[1] + (theme.crest[1] - theme.trough[1]) * mix;
+    const lineColorB = theme.trough[2] + (theme.crest[2] - theme.trough[2]) * mix;
+    canvasCtx.strokeStyle = `rgba(${Math.round(lineColorR)}, ${Math.round(lineColorG)}, ${Math.round(lineColorB)}, ${alpha})`;
+    canvasCtx.lineWidth = 0.8 + t * 1.3;
+
+    canvasCtx.beginPath();
+    let hasPoint = false;
+    for (let x = 0; x < GRID_WIDTH; x += 2) {
+      const z = current[tank.index(x, y)] * 1.2;
+      const p = project3DPoint(x, y, z);
+      if (!hasPoint) {
+        canvasCtx.moveTo(p.x, p.y);
+        hasPoint = true;
+      } else {
+        canvasCtx.lineTo(p.x, p.y);
+      }
+    }
+    canvasCtx.stroke();
+  }
+
+  for (let x = 0; x < GRID_WIDTH; x += 8) {
+    const top = project3DPoint(x, 0, 0);
+    const bottom = project3DPoint(x, GRID_HEIGHT - 1, 0);
+    canvasCtx.strokeStyle = 'rgba(155, 207, 224, 0.08)';
+    canvasCtx.lineWidth = 1;
+    canvasCtx.beginPath();
+    canvasCtx.moveTo(top.x, top.y);
+    canvasCtx.lineTo(bottom.x, bottom.y);
+    canvasCtx.stroke();
+  }
+
+  canvasCtx.restore();
+
+  renderOverlay(theme);
 }
 
 function toGridX(canvasX) {
@@ -1513,6 +1826,14 @@ function applyGeometryDrag(gridX, gridY) {
       start.slitTopY + MIN_SLIT_HEIGHT,
       GRID_HEIGHT - 1 - EDIT_MARGIN
     );
+  } else if (role === 'diffraction-wall-center') {
+    geometry.wall.x = clamp(start.wall.x + dx, EDIT_MARGIN + start.wall.radius, GRID_WIDTH - 1 - EDIT_MARGIN - start.wall.radius);
+    geometry.wall.y = clamp(start.wall.y + dy, EDIT_MARGIN + start.wall.radius, GRID_HEIGHT - 1 - EDIT_MARGIN - start.wall.radius);
+  } else if (role === 'diffraction-wall-radius') {
+    const nextRadius = Math.hypot(gridX - start.wall.x, gridY - start.wall.y);
+    geometry.wall.radius = clamp(nextRadius, Number(elements.wallRadius.min), Number(elements.wallRadius.max));
+    geometry.wall.x = clamp(start.wall.x, EDIT_MARGIN + geometry.wall.radius, GRID_WIDTH - 1 - EDIT_MARGIN - geometry.wall.radius);
+    geometry.wall.y = clamp(start.wall.y, EDIT_MARGIN + geometry.wall.radius, GRID_HEIGHT - 1 - EDIT_MARGIN - geometry.wall.radius);
   } else if (role.startsWith('reflection-flat-line-')) {
     updateSegmentFromDrag(geometry.line, start.line, role, gridX, gridY, dx, dy);
   } else if (role.startsWith('reflection-diagonal-line-')) {
@@ -1542,25 +1863,73 @@ function applyGeometryDrag(gridX, gridY) {
 }
 
 function renderOverlay(theme) {
+  const is3D = state.viewMode === 'surface3d';
+  const mapPoint = (gx, gy) => {
+    if (is3D) {
+      const z = tank.curr[tank.index(clamp(Math.round(gx), 0, GRID_WIDTH - 1), clamp(Math.round(gy), 0, GRID_HEIGHT - 1))];
+      return project3DPoint(gx, gy, z);
+    }
+    return { x: toCanvasX(gx), y: toCanvasY(gy) };
+  };
+
   canvasCtx.save();
+  canvasCtx.imageSmoothingEnabled = true;
   canvasCtx.lineCap = 'round';
-  canvasCtx.lineWidth = Math.max(1, Math.round(elements.tankCanvas.width / 420));
+  canvasCtx.lineJoin = 'round';
+  const baseLineWidth = Math.max(1, elements.tankCanvas.width / 430);
 
   for (let i = 0; i < state.overlayLines.length; i += 1) {
     const line = state.overlayLines[i];
-    const style = line.style === 'mediumBoundary' ? 'rgba(126, 225, 215, 0.95)' : theme.line;
+    const a = mapPoint(line.x0, line.y0);
+    const b = mapPoint(line.x1, line.y1);
 
-    canvasCtx.strokeStyle = style;
+    if (line.style === 'mirror') {
+      canvasCtx.strokeStyle = 'rgba(228, 239, 246, 0.92)';
+      canvasCtx.lineWidth = baseLineWidth * 3.2;
+      canvasCtx.shadowColor = 'rgba(228, 239, 246, 0.4)';
+      canvasCtx.shadowBlur = is3D ? 4 : 7;
+      canvasCtx.beginPath();
+      canvasCtx.moveTo(a.x, a.y);
+      canvasCtx.lineTo(b.x, b.y);
+      canvasCtx.stroke();
+
+      canvasCtx.shadowBlur = 0;
+      canvasCtx.strokeStyle = 'rgba(126, 225, 215, 0.82)';
+      canvasCtx.lineWidth = baseLineWidth * 1.2;
+      canvasCtx.beginPath();
+      canvasCtx.moveTo(a.x, a.y);
+      canvasCtx.lineTo(b.x, b.y);
+      canvasCtx.stroke();
+      continue;
+    }
+
+    canvasCtx.shadowBlur = 0;
+    canvasCtx.lineWidth = baseLineWidth * (line.style === 'mediumBoundary' ? 2 : 2.4);
+    canvasCtx.strokeStyle = line.style === 'mediumBoundary' ? 'rgba(126, 225, 215, 0.95)' : theme.line;
     canvasCtx.beginPath();
-    canvasCtx.moveTo(toCanvasX(line.x0), toCanvasY(line.y0));
-    canvasCtx.lineTo(toCanvasX(line.x1), toCanvasY(line.y1));
+    canvasCtx.moveTo(a.x, a.y);
+    canvasCtx.lineTo(b.x, b.y);
+    canvasCtx.stroke();
+  }
+
+  for (let i = 0; i < state.overlayCircles.length; i += 1) {
+    const circle = state.overlayCircles[i];
+    const center = mapPoint(circle.x, circle.y);
+    const edge = mapPoint(circle.x + circle.radius, circle.y);
+    const radius = Math.max(2, Math.hypot(edge.x - center.x, edge.y - center.y));
+
+    canvasCtx.strokeStyle = theme.line;
+    canvasCtx.lineWidth = baseLineWidth * 2.2;
+    canvasCtx.beginPath();
+    canvasCtx.arc(center.x, center.y, radius, 0, TWO_PI);
     canvasCtx.stroke();
   }
 
   for (let i = 0; i < state.overlayPoints.length; i += 1) {
     const point = state.overlayPoints[i];
-    const x = toCanvasX(point.x);
-    const y = toCanvasY(point.y);
+    const mapped = mapPoint(point.x, point.y);
+    const x = mapped.x;
+    const y = mapped.y;
 
     if (point.style === 'focus') {
       canvasCtx.strokeStyle = 'rgba(255, 125, 110, 0.92)';
@@ -1576,6 +1945,11 @@ function renderOverlay(theme) {
       canvasCtx.arc(x, y, 3.2, 0, TWO_PI);
       canvasCtx.fill();
     }
+  }
+
+  if (is3D) {
+    canvasCtx.restore();
+    return;
   }
 
   for (let i = 0; i < state.editHandles.length; i += 1) {
@@ -1642,6 +2016,16 @@ function bindEvents() {
     state.theme = elements.themeSelect.value;
   });
 
+  elements.viewMode.addEventListener('change', () => {
+    if (state.drag && elements.tankCanvas.hasPointerCapture(state.drag.pointerId)) {
+      elements.tankCanvas.releasePointerCapture(state.drag.pointerId);
+    }
+    state.viewMode = elements.viewMode.value;
+    state.drag = null;
+    state.hoveredHandleId = null;
+    elements.tankCanvas.style.cursor = state.viewMode === 'surface3d' ? 'default' : 'crosshair';
+  });
+
   elements.playBtn.addEventListener('click', () => {
     state.running = !state.running;
     elements.playBtn.textContent = state.running ? 'Pause' : 'Play';
@@ -1680,7 +2064,7 @@ function bindEvents() {
 
   elements.damping.addEventListener('input', () => {
     updateRangeLabels();
-    tank.damping = Number(elements.damping.value);
+    tank.dampingLoss = Number(elements.damping.value);
   });
 
   elements.speed.addEventListener('input', () => {
@@ -1708,12 +2092,25 @@ function bindEvents() {
     state.needsRebuild = true;
   });
 
+  elements.wallRadius.addEventListener('input', () => {
+    updateRangeLabels();
+    state.needsRebuild = true;
+  });
+
   elements.showNodes.addEventListener('change', () => {
     state.showNodes = elements.showNodes.checked;
   });
 
   elements.reducedMotion.addEventListener('change', () => {
     state.reducedMotion = elements.reducedMotion.checked;
+  });
+
+  elements.saveScreenshotBtn.addEventListener('click', () => {
+    saveScreenshot();
+  });
+
+  elements.saveReportBtn.addEventListener('click', () => {
+    saveNotesReport();
   });
 
   elements.focusSourceBtn.addEventListener('click', () => {
@@ -1734,6 +2131,11 @@ function bindEvents() {
   elements.tankCanvas.addEventListener('pointerdown', (event) => {
     const pointer = getCanvasPointerPosition(event);
     state.pointer = { x: pointer.cellX, y: pointer.cellY };
+    if (state.viewMode === 'surface3d') {
+      state.hoveredHandleId = null;
+      return;
+    }
+
     const handle = findEditHandleAtCanvas(pointer.canvasX, pointer.canvasY);
     state.hoveredHandleId = handle ? handle.id : null;
 
@@ -1756,6 +2158,12 @@ function bindEvents() {
   elements.tankCanvas.addEventListener('pointermove', (event) => {
     const pointer = getCanvasPointerPosition(event);
     state.pointer = { x: pointer.cellX, y: pointer.cellY };
+
+    if (state.viewMode === 'surface3d') {
+      state.hoveredHandleId = null;
+      elements.tankCanvas.style.cursor = 'default';
+      return;
+    }
 
     if (state.drag && state.drag.pointerId === event.pointerId) {
       applyGeometryDrag(pointer.gridX, pointer.gridY);
@@ -1808,6 +2216,10 @@ function bindEvents() {
     if (event.key.toLowerCase() === 'r') {
       tank.clearWaves();
       updateStatus();
+    }
+
+    if (event.key.toLowerCase() === 's') {
+      saveScreenshot();
     }
   });
 }
