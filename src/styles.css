@@ -316,6 +316,47 @@ input[type='range'] {
   font-family: 'IBM Plex Mono', monospace;
 }
 
+.worksheet-form {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.worksheet-section {
+  border: 1px solid rgba(157, 228, 255, 0.18);
+  border-radius: 10px;
+  padding: 0.55rem 0.6rem;
+  background: rgba(3, 22, 30, 0.34);
+}
+
+.worksheet-section h4 {
+  margin: 0 0 0.4rem;
+  font-size: 0.84rem;
+  color: var(--accent-2);
+  letter-spacing: 0.03em;
+}
+
+.worksheet-question {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.55rem;
+}
+
+.worksheet-question:last-child {
+  margin-bottom: 0;
+}
+
+.worksheet-question label {
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.worksheet-question textarea {
+  min-height: 4.5rem;
+  font-size: 0.83rem;
+  border-radius: 8px;
+}
+
 .footer-note {
   position: relative;
   z-index: 1;

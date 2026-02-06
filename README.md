@@ -17,6 +17,9 @@ This project is designed around your original activity flow:
 - Control-of-variables friendly UI with clear, labeled sliders.
 - Accessibility options including reduced motion mode and calmer color themes.
 - Quantitative readouts (local displacement/speed, predicted wavelength estimates).
+- Optional absorbing boundaries so edge reflections are off by default.
+- In-canvas amplitude probe tool for point measurements.
+- Worksheet response panel with DOCX export for completed student work.
 
 ## Quick start
 
@@ -36,13 +39,16 @@ python3 -m http.server 8000
 - `Preset`: switches between lab phenomena.
 - `Pause / Step / Clear Waves / Reset Preset`: structured exploration workflow.
 - `Frequency, Amplitude, Damping Loss (0% allowed), Simulation Speed`: wave behavior controls.
+- `Wave Type`: plane, point, dual in-phase/out-of-phase, and angled plane sources.
 - Geometry controls appear only when relevant to the selected preset (including movable/resizable obstacle box in wall diffraction).
 - Direct manipulation: drag on-canvas handles to move and resize mirrors, slit openings, boundaries, and sources.
 - `View Mode`: top-down field view or 3D surface view.
+- `Edge Behavior`: absorbing edges (default, no end-wall reflections) or reflective walls.
+- `Enable amplitude probe`: place/drag a probe and read local amplitude + peak.
 - `Show estimated node lines`: highlights stable destructive-interference bands.
 - `Reduced motion mode`: lowers visual intensity and frame rate.
 - `Save Screenshot`: downloads a PNG of the current simulation frame.
-- `Download Notes DOCX`: downloads a `.docx` document with screenshot, settings, and student notes.
+- `Download Notes DOCX`: downloads a `.docx` document with screenshot, settings, worksheet responses, and student notes.
 
 Keyboard shortcuts:
 - `Space`: Play/pause
@@ -62,7 +68,6 @@ Startup behavior:
 
 ## Next build targets
 
-- Student worksheet mode with embedded prompts and export.
-- Measurement tools (angle ruler, wavelength ruler, probe graphs).
+- Measurement tools (angle ruler, wavelength ruler, live probe graph).
 - Optional challenge mode with prediction checkpoints.
 - Teacher dashboard for preset locking and class pacing.

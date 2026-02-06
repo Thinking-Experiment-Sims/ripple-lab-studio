@@ -214,6 +214,134 @@ const PRESETS = {
   }
 };
 
+const WORKSHEET_TEMPLATE = [
+  {
+    title: 'Part 1: Reflection — The Geometry of the Bounce',
+    questions: [
+      {
+        id: 'q1a',
+        prompt:
+          '1a) Draw the normal line at the point of incidence. Describe what you drew and how you placed the normal.',
+        rows: 3
+      },
+      {
+        id: 'q1b',
+        prompt: '1b) Draw the reflected ray at the correct angle. Explain your angle choice.',
+        rows: 3
+      },
+      {
+        id: 'q1c',
+        prompt: '1c) Draw reflected wavefronts. How did you keep wavelength consistent after reflection?',
+        rows: 3
+      },
+      {
+        id: 'q2',
+        prompt: '2) Complete the law: The angle of incidence is always __________ to the angle of reflection.',
+        rows: 2
+      }
+    ]
+  },
+  {
+    title: 'Part 2: Diffraction — Bending Around Boundaries',
+    questions: [
+      {
+        id: 'q3',
+        prompt: '3) True or False: Diffraction changes the speed of the wave.',
+        rows: 2
+      },
+      {
+        id: 'q4a',
+        prompt: '4a) In which scenario did the waves bend more around the corner?',
+        rows: 2
+      },
+      {
+        id: 'q4b',
+        prompt: '4b) Based on your observations, how does wavelength affect diffraction amount?',
+        rows: 4
+      },
+      {
+        id: 'q5',
+        prompt: '5) Describe your diffraction-around-a-barrier sketch and what pattern it shows.',
+        rows: 4
+      }
+    ]
+  },
+  {
+    title: 'Part 3: Refraction — Bending Through Boundaries',
+    questions: [
+      {
+        id: 'q6a',
+        prompt:
+          '6a) Snell’s Law: air (n=1.00) to glass (n=1.50), incidence 30°. Compute the refraction angle.',
+        rows: 3
+      },
+      {
+        id: 'q6b',
+        prompt: '6b) Does the ray bend toward or away from the normal entering glass? Explain why.',
+        rows: 3
+      },
+      {
+        id: 'q7a',
+        prompt: '7a) What happens to wave speed in a slower medium?',
+        rows: 2
+      },
+      {
+        id: 'q7b',
+        prompt: '7b) Does frequency change when entering a new medium? Explain.',
+        rows: 3
+      },
+      {
+        id: 'q7c',
+        prompt: '7c) If speed decreases but frequency is fixed, what happens to wavelength (use v = f*lambda)?',
+        rows: 3
+      },
+      {
+        id: 'q8',
+        prompt:
+          '8) Refraction diagram response: describe your incident ray, normal, refracted ray, and label angles theta1/theta2.',
+        rows: 4
+      },
+      {
+        id: 'q9a',
+        prompt: '9a) Find the critical angle for water (n=1.33) to air (n=1.00) using Snell’s Law.',
+        rows: 3
+      },
+      {
+        id: 'q9b',
+        prompt: '9b) Give a real-world example of total internal reflection and why it is useful.',
+        rows: 3
+      }
+    ]
+  },
+  {
+    title: 'Part 4: Conceptual Checkpoints',
+    questions: [
+      {
+        id: 'q10',
+        prompt: '10) Does frequency change during reflection/refraction/diffraction? Explain.',
+        rows: 3
+      },
+      {
+        id: 'q11',
+        prompt: '11) Why does the diffraction shadow zone still receive wave energy?',
+        rows: 3
+      },
+      {
+        id: 'q12',
+        prompt:
+          '12) Why can sound bend around a corner but light usually cannot? Use wavelength in your explanation.',
+        rows: 3
+      },
+      {
+        id: 'q13',
+        prompt:
+          '13) Compare reflection, refraction, and diffraction. Discuss direction, speed, frequency, and wavelength.',
+        rows: 5
+      }
+    ]
+  }
+];
+
 const THEMES = {
   atlantic: {
     name: 'Atlantic',
@@ -386,6 +514,7 @@ class RippleTank {
     this.size = width * height;
     this.baseSpeed = 0.34;
     this.dampingLoss = 0.004;
+    this.boundaryMode = 'absorb';
     this.time = 0;
 
     this.prev = new Float32Array(this.size);
@@ -410,7 +539,7 @@ class RippleTank {
   }
 
   buildEdgeMask() {
-    const margin = 14;
+    const margin = 26;
     for (let y = 0; y < this.height; y += 1) {
       for (let x = 0; x < this.width; x += 1) {
         const edgeDistance = Math.min(x, y, this.width - 1 - x, this.height - 1 - y);
@@ -418,8 +547,8 @@ class RippleTank {
         if (edgeDistance >= margin) {
           this.edgeMask[i] = 1;
         } else {
-          const t = edgeDistance / margin;
-          this.edgeMask[i] = 0.85 + 0.15 * clamp(t, 0, 1);
+          const t = clamp(edgeDistance / margin, 0, 1);
+          this.edgeMask[i] = 0.08 + 0.92 * t * t;
         }
       }
     }
@@ -674,6 +803,7 @@ class RippleTank {
     const obstacle = this.obstacle;
     const edgeMask = this.edgeMask;
     const damping = clamp(1 - this.dampingLoss, 0, 1);
+    const useAbsorbingEdges = this.boundaryMode === 'absorb';
 
     for (let y = 1; y < height - 1; y += 1) {
       const row = y * width;
@@ -685,19 +815,34 @@ class RippleTank {
         }
 
         const laplacian = curr[i - 1] + curr[i + 1] + curr[i - width] + curr[i + width] - 4 * curr[i];
-        const value = (2 * curr[i] - prev[i] + medium[i] * laplacian) * damping * edgeMask[i];
+        const edgeScale = useAbsorbingEdges ? edgeMask[i] : 1;
+        const value = (2 * curr[i] - prev[i] + medium[i] * laplacian) * damping * edgeScale;
         next[i] = value;
       }
     }
 
-    for (let x = 0; x < width; x += 1) {
-      next[x] = 0;
-      next[(height - 1) * width + x] = 0;
-    }
+    if (useAbsorbingEdges) {
+      const edgeDamp = 0.92;
+      for (let x = 0; x < width; x += 1) {
+        next[x] = next[width + x] * edgeDamp;
+        next[(height - 1) * width + x] = next[(height - 2) * width + x] * edgeDamp;
+      }
 
-    for (let y = 0; y < height; y += 1) {
-      next[y * width] = 0;
-      next[y * width + width - 1] = 0;
+      for (let y = 0; y < height; y += 1) {
+        const row = y * width;
+        next[row] = next[row + 1] * edgeDamp;
+        next[row + width - 1] = next[row + width - 2] * edgeDamp;
+      }
+    } else {
+      for (let x = 0; x < width; x += 1) {
+        next[x] = 0;
+        next[(height - 1) * width + x] = 0;
+      }
+
+      for (let y = 0; y < height; y += 1) {
+        next[y * width] = 0;
+        next[y * width + width - 1] = 0;
+      }
     }
 
     this.prev = curr;
@@ -716,6 +861,7 @@ const elements = {
   stepBtn: document.getElementById('stepBtn'),
   clearBtn: document.getElementById('clearBtn'),
   resetBtn: document.getElementById('resetBtn'),
+  sourceMode: document.getElementById('sourceMode'),
   frequency: document.getElementById('frequency'),
   frequencyValue: document.getElementById('frequencyValue'),
   amplitude: document.getElementById('amplitude'),
@@ -740,19 +886,24 @@ const elements = {
   focusSourceBtn: document.getElementById('focusSourceBtn'),
   themeSelect: document.getElementById('themeSelect'),
   viewMode: document.getElementById('viewMode'),
+  boundaryMode: document.getElementById('boundaryMode'),
+  probeEnabled: document.getElementById('probeEnabled'),
   showNodes: document.getElementById('showNodes'),
   reducedMotion: document.getElementById('reducedMotion'),
   saveScreenshotBtn: document.getElementById('saveScreenshotBtn'),
   saveReportBtn: document.getElementById('saveReportBtn'),
   metricDeep: document.getElementById('metricDeep'),
   metricShallow: document.getElementById('metricShallow'),
+  probeReadout: document.getElementById('probeReadout'),
+  probePeak: document.getElementById('probePeak'),
   statusLine: document.getElementById('statusLine'),
   guideTitle: document.getElementById('guideTitle'),
   guideConcept: document.getElementById('guideConcept'),
   guideGoal: document.getElementById('guideGoal'),
   guideObservations: document.getElementById('guideObservations'),
   tankCanvas: document.getElementById('tankCanvas'),
-  labNotes: document.getElementById('labNotes')
+  labNotes: document.getElementById('labNotes'),
+  worksheetForm: document.getElementById('worksheetForm')
 };
 
 const controlGroups = Array.from(document.querySelectorAll('.control-group'));
@@ -768,10 +919,20 @@ const state = {
   preset: 'diffraction',
   theme: 'atlantic',
   viewMode: 'top',
+  sourceMode: 'plane',
+  boundaryMode: 'absorb',
   running: false,
   showNodes: false,
   reducedMotion: false,
   focusSourceMode: false,
+  probe: {
+    enabled: false,
+    x: GRID_WIDTH * 0.62,
+    y: GRID_HEIGHT * 0.5,
+    peak: 0,
+    history: []
+  },
+  worksheetAnswers: {},
   overlayLines: [],
   overlayPoints: [],
   overlayRects: [],
@@ -804,6 +965,106 @@ function createTimestampParts() {
   return { now, slug, readable };
 }
 
+function getSourceModeLabel(mode) {
+  switch (mode) {
+    case 'point':
+      return 'Point (Circular)';
+    case 'dualIn':
+      return 'Dual Point (In Phase)';
+    case 'dualOut':
+      return 'Dual Point (Out of Phase)';
+    case 'angledPlane':
+      return 'Angled Plane';
+    default:
+      return 'Plane (Flat)';
+  }
+}
+
+function getBoundaryModeLabel(mode) {
+  return mode === 'reflect' ? 'Reflective Walls' : 'Absorbing (No Reflection)';
+}
+
+function getWorksheetAnswer(id) {
+  return (state.worksheetAnswers[id] || '').trim();
+}
+
+function setProbePosition(x, y) {
+  state.probe.x = clamp(x, 0, GRID_WIDTH - 1);
+  state.probe.y = clamp(y, 0, GRID_HEIGHT - 1);
+}
+
+function isProbeHit(canvasX, canvasY) {
+  if (!state.probe.enabled || state.viewMode === 'surface3d') {
+    return false;
+  }
+
+  const px = toCanvasX(state.probe.x);
+  const py = toCanvasY(state.probe.y);
+  const dx = canvasX - px;
+  const dy = canvasY - py;
+  return dx * dx + dy * dy <= 12 * 12;
+}
+
+function updateProbeMetrics() {
+  if (!state.probe.enabled) {
+    elements.probeReadout.textContent = 'Probe: off';
+    elements.probePeak.textContent = '';
+    return;
+  }
+
+  const x = clamp(Math.round(state.probe.x), 0, GRID_WIDTH - 1);
+  const y = clamp(Math.round(state.probe.y), 0, GRID_HEIGHT - 1);
+  const value = tank.curr[tank.index(x, y)];
+  const absValue = Math.abs(value);
+  state.probe.peak = Math.max(absValue, state.probe.peak * 0.995);
+  state.probe.history.push(value);
+  if (state.probe.history.length > 240) {
+    state.probe.history.shift();
+  }
+
+  elements.probeReadout.textContent = `Probe @ (${x},${y}): A=${formatNumber(value, 3)}`;
+  elements.probePeak.textContent = `Probe peak |A|=${formatNumber(state.probe.peak, 3)}`;
+}
+
+function renderWorksheetForm() {
+  const root = elements.worksheetForm;
+  root.textContent = '';
+
+  for (let i = 0; i < WORKSHEET_TEMPLATE.length; i += 1) {
+    const section = WORKSHEET_TEMPLATE[i];
+    const sectionEl = document.createElement('div');
+    sectionEl.className = 'worksheet-section';
+
+    const title = document.createElement('h4');
+    title.textContent = section.title;
+    sectionEl.appendChild(title);
+
+    for (let q = 0; q < section.questions.length; q += 1) {
+      const item = section.questions[q];
+      const qWrap = document.createElement('div');
+      qWrap.className = 'worksheet-question';
+
+      const label = document.createElement('label');
+      label.setAttribute('for', `worksheet-${item.id}`);
+      label.textContent = item.prompt;
+      qWrap.appendChild(label);
+
+      const textarea = document.createElement('textarea');
+      textarea.id = `worksheet-${item.id}`;
+      textarea.rows = item.rows || 3;
+      textarea.value = state.worksheetAnswers[item.id] || '';
+      textarea.addEventListener('input', () => {
+        state.worksheetAnswers[item.id] = textarea.value;
+      });
+      qWrap.appendChild(textarea);
+
+      sectionEl.appendChild(qWrap);
+    }
+
+    root.appendChild(sectionEl);
+  }
+}
+
 function downloadBlob(filename, blob) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -834,6 +1095,8 @@ function buildSettingsList() {
   const rows = [
     `Preset: ${PRESETS[state.preset].name}`,
     `View: ${state.viewMode === 'surface3d' ? '3D Surface' : 'Top View'}`,
+    `Wave type: ${getSourceModeLabel(state.sourceMode)}`,
+    `Edge behavior: ${getBoundaryModeLabel(state.boundaryMode)}`,
     `Frequency: ${elements.frequency.value} Hz`,
     `Amplitude: ${elements.amplitude.value}`,
     `Damping loss: ${(Number(elements.damping.value) * 100).toFixed(1)}%`,
@@ -855,6 +1118,9 @@ function buildSettingsList() {
   }
   if (state.preset === 'interference') {
     rows.push(`Source separation: ${elements.separation.value}px`);
+  }
+  if (state.probe.enabled) {
+    rows.push(`Probe location: (${Math.round(state.probe.x)}, ${Math.round(state.probe.y)})`);
   }
 
   return rows;
@@ -888,17 +1154,44 @@ async function saveNotesDocx() {
 
     const noteLines = notes.length > 0 ? notes.split(/\r?\n/) : ['No notes entered.'];
     const settings = buildSettingsList();
+    const worksheetBlocks = [];
+    for (let s = 0; s < WORKSHEET_TEMPLATE.length; s += 1) {
+      const section = WORKSHEET_TEMPLATE[s];
+      worksheetBlocks.push(
+        new Paragraph({
+          text: section.title,
+          heading: HeadingLevel.HEADING_3
+        })
+      );
+
+      for (let q = 0; q < section.questions.length; q += 1) {
+        const item = section.questions[q];
+        const answer = getWorksheetAnswer(item.id);
+        worksheetBlocks.push(
+          new Paragraph({
+            children: [new TextRun({ text: item.prompt, bold: true })]
+          })
+        );
+        worksheetBlocks.push(
+          new Paragraph({
+            text: answer || '[No response entered]',
+            spacing: { after: 220 }
+          })
+        );
+      }
+    }
 
     const children = [
       new Paragraph({
-        text: 'Ripple Lab Studio Notes',
+        text: 'Reflection, Refraction, and Diffraction - Physics Worksheet',
         heading: HeadingLevel.HEADING_1
       }),
       new Paragraph({
-        children: [new TextRun({ text: `Generated: ${readable}`, italics: true })]
+        children: [new TextRun({ text: `Generated: ${readable}`, italics: true })],
+        spacing: { after: 220 }
       }),
       new Paragraph({
-        text: 'Screenshot',
+        text: 'Simulation Evidence',
         heading: HeadingLevel.HEADING_2
       }),
       new Paragraph({
@@ -910,7 +1203,7 @@ async function saveNotesDocx() {
         ]
       }),
       new Paragraph({
-        text: 'Settings',
+        text: 'Current Settings',
         heading: HeadingLevel.HEADING_2
       }),
       ...settings.map(
@@ -921,7 +1214,12 @@ async function saveNotesDocx() {
           })
       ),
       new Paragraph({
-        text: 'Student Notes',
+        text: 'Worksheet Responses',
+        heading: HeadingLevel.HEADING_2
+      }),
+      ...worksheetBlocks,
+      new Paragraph({
+        text: 'Additional Lab Notes',
         heading: HeadingLevel.HEADING_2
       }),
       ...noteLines.map((line) => new Paragraph({ text: line || ' ' }))
@@ -1088,6 +1386,95 @@ function addLineEditHandles(idPrefix, segment) {
   addEditHandle({ id: `${idPrefix}-move`, role: `${idPrefix}-move`, x: midpoint.x, y: midpoint.y });
 }
 
+function addConfiguredSourceFromLine(line, frequency, amplitude) {
+  const mode = state.sourceMode;
+  const x0 = line.x0;
+  const y0 = line.y0;
+  const x1 = line.x1;
+  const y1 = line.y1;
+  const midpoint = { x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
+  const dirX = x1 - x0;
+  const dirY = y1 - y0;
+  const length = Math.max(1, Math.hypot(dirX, dirY));
+  const perpX = -dirY / length;
+  const perpY = dirX / length;
+
+  if (mode === 'point') {
+    tank.addPointSource({
+      x: midpoint.x,
+      y: midpoint.y,
+      radius: 1,
+      frequency,
+      amplitude,
+      relativeAmplitude: 1
+    });
+    state.overlayPoints.push({ x: midpoint.x, y: midpoint.y, style: 'source' });
+    return;
+  }
+
+  if (mode === 'dualIn' || mode === 'dualOut') {
+    const spacing = 8;
+    const phase2 = mode === 'dualOut' ? Math.PI : 0;
+    const p1 = { x: midpoint.x + perpX * spacing, y: midpoint.y + perpY * spacing };
+    const p2 = { x: midpoint.x - perpX * spacing, y: midpoint.y - perpY * spacing };
+
+    tank.addPointSource({
+      x: p1.x,
+      y: p1.y,
+      radius: 1,
+      frequency,
+      amplitude,
+      phase: 0,
+      relativeAmplitude: 0.75
+    });
+    tank.addPointSource({
+      x: p2.x,
+      y: p2.y,
+      radius: 1,
+      frequency,
+      amplitude,
+      phase: phase2,
+      relativeAmplitude: 0.75
+    });
+    state.overlayPoints.push({ x: p1.x, y: p1.y, style: 'source' });
+    state.overlayPoints.push({ x: p2.x, y: p2.y, style: 'source' });
+    return;
+  }
+
+  if (mode === 'angledPlane') {
+    const tilt = 0.34;
+    const cx = midpoint.x;
+    const cy = midpoint.y;
+    const ux = dirX / length;
+    const uy = dirY / length;
+    const vx = ux * Math.cos(tilt) - uy * Math.sin(tilt);
+    const vy = ux * Math.sin(tilt) + uy * Math.cos(tilt);
+    const halfLength = length * 0.5;
+    tank.addLineSource({
+      x0: cx - vx * halfLength,
+      y0: cy - vy * halfLength,
+      x1: cx + vx * halfLength,
+      y1: cy + vy * halfLength,
+      thickness: 1,
+      frequency,
+      amplitude,
+      relativeAmplitude: 1
+    });
+    return;
+  }
+
+  tank.addLineSource({
+    x0,
+    y0,
+    x1,
+    y1,
+    thickness: 1,
+    frequency,
+    amplitude,
+    relativeAmplitude: 1
+  });
+}
+
 function populateSelects() {
   const presetEntries = Object.entries(PRESETS);
   for (let i = 0; i < presetEntries.length; i += 1) {
@@ -1170,11 +1557,15 @@ function updateMetrics() {
   } else {
     elements.metricShallow.textContent = 'Single medium active in this preset';
   }
+
+  updateProbeMetrics();
 }
 
 function updateStatus() {
   const stateText = state.running ? 'running' : 'paused';
   const modeText = state.viewMode === 'surface3d' ? '3D' : 'top';
+  const boundaryText = state.boundaryMode === 'reflect' ? 'reflective edges' : 'absorbing edges';
+  const probeText = state.probe.enabled ? ' | probe on' : '';
   const editState =
     state.viewMode === 'surface3d'
       ? ' | 3D view (switch to top view to edit geometry)'
@@ -1183,7 +1574,7 @@ function updateStatus() {
         : state.hoveredHandleId
           ? ' | drag handles to move/resize'
           : '';
-  const base = `${PRESETS[state.preset].name} | ${stateText} | ${modeText}${editState}`;
+  const base = `${PRESETS[state.preset].name} | ${stateText} | ${modeText} | ${boundaryText}${probeText}${editState}`;
   if (!state.pointer) {
     elements.statusLine.textContent = base;
     return;
@@ -1203,6 +1594,7 @@ function rebuildPresetGeometry() {
   tank.clearEnvironment();
   tank.clearWaves();
   tank.dampingLoss = Number(elements.damping.value);
+  tank.boundaryMode = state.boundaryMode;
 
   state.overlayLines = [];
   state.overlayPoints = [];
@@ -1275,16 +1667,16 @@ function setupDiffractionPreset(frequency, amplitude) {
     tank.setObstacleDisk(wallX, y, 1);
   }
 
-  tank.addLineSource({
-    x0: 6,
-    y0: 6,
-    x1: 6,
-    y1: GRID_HEIGHT - 7,
-    thickness: 1,
+  addConfiguredSourceFromLine(
+    {
+      x0: 6,
+      y0: 6,
+      x1: 6,
+      y1: GRID_HEIGHT - 7
+    },
     frequency,
-    amplitude,
-    relativeAmplitude: 1
-  });
+    amplitude
+  );
 
   state.overlayLines.push({
     x0: wallX,
@@ -1333,16 +1725,16 @@ function setupDiffractionWallPreset(frequency, amplitude) {
 
   tank.setObstacleRoundedRect(wall.x, wall.y, wall.width, wall.height, 2.2);
 
-  tank.addLineSource({
-    x0: 6,
-    y0: 6,
-    x1: 6,
-    y1: GRID_HEIGHT - 7,
-    thickness: 1,
+  addConfiguredSourceFromLine(
+    {
+      x0: 6,
+      y0: 6,
+      x1: 6,
+      y1: GRID_HEIGHT - 7
+    },
     frequency,
-    amplitude,
-    relativeAmplitude: 1
-  });
+    amplitude
+  );
 
   state.overlayRects.push({
     x: wall.x,
@@ -1373,16 +1765,16 @@ function setupReflectionFlatPreset(frequency, amplitude) {
   geometry.line = line;
   tank.drawLineObstacle(line.x0, line.y0, line.x1, line.y1, 1);
 
-  tank.addLineSource({
-    x0: 10,
-    y0: 9,
-    x1: GRID_WIDTH - 11,
-    y1: 9,
-    thickness: 1,
+  addConfiguredSourceFromLine(
+    {
+      x0: 10,
+      y0: 9,
+      x1: GRID_WIDTH - 11,
+      y1: 9
+    },
     frequency,
-    amplitude,
-    relativeAmplitude: 1
-  });
+    amplitude
+  );
 
   state.overlayLines.push({
     x0: line.x0,
@@ -1401,16 +1793,16 @@ function setupReflectionDiagonalPreset(frequency, amplitude) {
   geometry.line = line;
 
   tank.drawLineObstacle(line.x0, line.y0, line.x1, line.y1, 1);
-  tank.addLineSource({
-    x0: 10,
-    y0: 9,
-    x1: GRID_WIDTH - 11,
-    y1: 9,
-    thickness: 1,
+  addConfiguredSourceFromLine(
+    {
+      x0: 10,
+      y0: 9,
+      x1: GRID_WIDTH - 11,
+      y1: 9
+    },
     frequency,
-    amplitude,
-    relativeAmplitude: 1
-  });
+    amplitude
+  );
 
   state.overlayLines.push({ x0: line.x0, y0: line.y0, x1: line.x1, y1: line.y1, style: 'mirror' });
   addLineEditHandles('reflection-diagonal-line', line);
@@ -1441,16 +1833,16 @@ function setupParabolicPreset(frequency, amplitude) {
       relativeAmplitude: 1
     });
   } else {
-    tank.addLineSource({
-      x0: 10,
-      y0: 9,
-      x1: GRID_WIDTH - 11,
-      y1: 9,
-      thickness: 1,
+    addConfiguredSourceFromLine(
+      {
+        x0: 10,
+        y0: 9,
+        x1: GRID_WIDTH - 11,
+        y1: 9
+      },
       frequency,
-      amplitude,
-      relativeAmplitude: 1
-    });
+      amplitude
+    );
   }
 
   state.overlayPoints.push({ x: centerX, y: focusY, style: 'focus' });
@@ -1490,16 +1882,16 @@ function setupRefractionBoundaryPreset(frequency, amplitude) {
   const shallowSpeed = tank.baseSpeed * ratio;
 
   tank.setMediumRect(boundaryX, 0, GRID_WIDTH - 1, GRID_HEIGHT - 1, shallowSpeed);
-  tank.addLineSource({
-    x0: 8,
-    y0: 6,
-    x1: 8,
-    y1: GRID_HEIGHT - 7,
-    thickness: 1,
+  addConfiguredSourceFromLine(
+    {
+      x0: 8,
+      y0: 6,
+      x1: 8,
+      y1: GRID_HEIGHT - 7
+    },
     frequency,
-    amplitude,
-    relativeAmplitude: 1
-  });
+    amplitude
+  );
 
   state.overlayLines.push({
     x0: boundaryX,
@@ -1532,16 +1924,16 @@ function setupRefractionAngledPreset(frequency, amplitude) {
   const normalY = dirX;
 
   tank.setMediumHalfPlane(midpoint.x, midpoint.y, normalX, normalY, shallowSpeed);
-  tank.addLineSource({
-    x0: 8,
-    y0: 8,
-    x1: 8,
-    y1: GRID_HEIGHT - 9,
-    thickness: 1,
+  addConfiguredSourceFromLine(
+    {
+      x0: 8,
+      y0: 8,
+      x1: 8,
+      y1: GRID_HEIGHT - 9
+    },
     frequency,
-    amplitude,
-    relativeAmplitude: 1
-  });
+    amplitude
+  );
 
   state.overlayLines.push({
     x0: boundary.x0,
@@ -1601,6 +1993,7 @@ function applyPreset(presetId) {
   state.hoveredHandleId = null;
 
   elements.presetSelect.value = presetId;
+  elements.sourceMode.value = defaults.sourceMode || 'plane';
   elements.frequency.value = defaults.frequency;
   elements.amplitude.value = defaults.amplitude;
   elements.damping.value = defaults.damping;
@@ -1611,9 +2004,12 @@ function applyPreset(presetId) {
   elements.separation.value = defaults.separation;
   elements.wallWidth.value = defaults.wallWidth;
   elements.wallHeight.value = defaults.wallHeight;
+  elements.boundaryMode.value = defaults.boundaryMode || 'absorb';
   elements.showNodes.checked = defaults.showNodes;
   elements.viewMode.value = defaults.viewMode || 'top';
 
+  state.sourceMode = elements.sourceMode.value;
+  state.boundaryMode = elements.boundaryMode.value;
   state.showNodes = defaults.showNodes;
   state.viewMode = defaults.viewMode || 'top';
   state.focusSourceMode = false;
@@ -2104,6 +2500,21 @@ function renderOverlay(theme) {
     }
   }
 
+  if (state.probe.enabled) {
+    const probePoint = mapPoint(state.probe.x, state.probe.y);
+    canvasCtx.strokeStyle = 'rgba(255, 250, 181, 0.95)';
+    canvasCtx.lineWidth = 1.5;
+    canvasCtx.beginPath();
+    canvasCtx.arc(probePoint.x, probePoint.y, 7, 0, TWO_PI);
+    canvasCtx.stroke();
+    canvasCtx.beginPath();
+    canvasCtx.moveTo(probePoint.x - 10, probePoint.y);
+    canvasCtx.lineTo(probePoint.x + 10, probePoint.y);
+    canvasCtx.moveTo(probePoint.x, probePoint.y - 10);
+    canvasCtx.lineTo(probePoint.x, probePoint.y + 10);
+    canvasCtx.stroke();
+  }
+
   if (is3D) {
     canvasCtx.restore();
     return;
@@ -2159,6 +2570,7 @@ function animationLoop(time) {
     runSimulationStep();
   }
 
+  updateProbeMetrics();
   renderField();
   updateStatus();
   state.lastFrameTime = time;
@@ -2173,6 +2585,11 @@ function bindEvents() {
     state.theme = elements.themeSelect.value;
   });
 
+  elements.sourceMode.addEventListener('change', () => {
+    state.sourceMode = elements.sourceMode.value;
+    state.needsRebuild = true;
+  });
+
   elements.viewMode.addEventListener('change', () => {
     if (state.drag && elements.tankCanvas.hasPointerCapture(state.drag.pointerId)) {
       elements.tankCanvas.releasePointerCapture(state.drag.pointerId);
@@ -2181,6 +2598,18 @@ function bindEvents() {
     state.drag = null;
     state.hoveredHandleId = null;
     elements.tankCanvas.style.cursor = state.viewMode === 'surface3d' ? 'default' : 'crosshair';
+  });
+
+  elements.boundaryMode.addEventListener('change', () => {
+    state.boundaryMode = elements.boundaryMode.value;
+    state.needsRebuild = true;
+  });
+
+  elements.probeEnabled.addEventListener('change', () => {
+    state.probe.enabled = elements.probeEnabled.checked;
+    state.probe.peak = 0;
+    state.probe.history = [];
+    updateProbeMetrics();
   });
 
   elements.playBtn.addEventListener('click', () => {
@@ -2300,10 +2729,11 @@ function bindEvents() {
 
     const handle = findEditHandleAtCanvas(pointer.canvasX, pointer.canvasY);
     const bodyRole = handle ? null : getPresetBodyDragRole(pointer.gridX, pointer.gridY);
+    const probeHit = !handle && !bodyRole && isProbeHit(pointer.canvasX, pointer.canvasY);
     state.hoveredHandleId = handle ? handle.id : null;
 
-    if (handle || bodyRole) {
-      const role = handle ? handle.role : bodyRole;
+    if (handle || bodyRole || probeHit) {
+      const role = handle ? handle.role : bodyRole || 'probe-move';
       const handleId = handle ? handle.id : role;
       state.drag = {
         pointerId: event.pointerId,
@@ -2317,6 +2747,14 @@ function bindEvents() {
       elements.tankCanvas.setPointerCapture(event.pointerId);
       elements.tankCanvas.style.cursor = 'grabbing';
       event.preventDefault();
+      return;
+    }
+
+    if (state.probe.enabled) {
+      setProbePosition(pointer.gridX, pointer.gridY);
+      state.probe.peak = 0;
+      state.probe.history = [];
+      updateProbeMetrics();
     }
   });
 
@@ -2331,6 +2769,12 @@ function bindEvents() {
     }
 
     if (state.drag && state.drag.pointerId === event.pointerId) {
+      if (state.drag.role === 'probe-move') {
+        setProbePosition(pointer.gridX, pointer.gridY);
+        updateProbeMetrics();
+        elements.tankCanvas.style.cursor = 'grabbing';
+        return;
+      }
       applyGeometryDrag(pointer.gridX, pointer.gridY);
       elements.tankCanvas.style.cursor = 'grabbing';
       return;
@@ -2338,8 +2782,9 @@ function bindEvents() {
 
     const handle = findEditHandleAtCanvas(pointer.canvasX, pointer.canvasY);
     const bodyRole = handle ? null : getPresetBodyDragRole(pointer.gridX, pointer.gridY);
+    const probeHit = !handle && !bodyRole && isProbeHit(pointer.canvasX, pointer.canvasY);
     state.hoveredHandleId = handle ? handle.id : null;
-    elements.tankCanvas.style.cursor = handle || bodyRole ? 'grab' : 'crosshair';
+    elements.tankCanvas.style.cursor = handle || bodyRole || probeHit ? 'grab' : state.probe.enabled ? 'cell' : 'crosshair';
   });
 
   const stopDrag = (event) => {
@@ -2354,8 +2799,9 @@ function bindEvents() {
     const pointer = getCanvasPointerPosition(event);
     const handle = findEditHandleAtCanvas(pointer.canvasX, pointer.canvasY);
     const bodyRole = handle ? null : getPresetBodyDragRole(pointer.gridX, pointer.gridY);
+    const probeHit = !handle && !bodyRole && isProbeHit(pointer.canvasX, pointer.canvasY);
     state.hoveredHandleId = handle ? handle.id : null;
-    elements.tankCanvas.style.cursor = handle || bodyRole ? 'grab' : 'crosshair';
+    elements.tankCanvas.style.cursor = handle || bodyRole || probeHit ? 'grab' : state.probe.enabled ? 'cell' : 'crosshair';
   };
 
   elements.tankCanvas.addEventListener('pointerup', stopDrag);
@@ -2396,6 +2842,7 @@ function bindEvents() {
 
 function init() {
   populateSelects();
+  renderWorksheetForm();
   bindEvents();
 
   state.theme = 'atlantic';

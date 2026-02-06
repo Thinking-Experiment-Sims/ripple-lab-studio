@@ -43,6 +43,16 @@
         <section>
           <h2>Wave Settings</h2>
           <label class="field">
+            <span>Wave Type</span>
+            <select id="sourceMode">
+              <option value="plane">Plane (Flat)</option>
+              <option value="point">Point (Circular)</option>
+              <option value="dualIn">Dual Point (In Phase)</option>
+              <option value="dualOut">Dual Point (Out of Phase)</option>
+              <option value="angledPlane">Angled Plane</option>
+            </select>
+          </label>
+          <label class="field">
             <span>Frequency <strong id="frequencyValue"></strong></span>
             <input id="frequency" type="range" min="0.5" max="8" step="0.1" />
           </label>
@@ -105,6 +115,17 @@
               <option value="surface3d">3D Surface</option>
             </select>
           </label>
+          <label class="field">
+            <span>Edge Behavior</span>
+            <select id="boundaryMode">
+              <option value="absorb">Absorbing (No Reflection)</option>
+              <option value="reflect">Reflective Walls</option>
+            </select>
+          </label>
+          <label class="toggle">
+            <input id="probeEnabled" type="checkbox" />
+            <span>Enable amplitude probe (click tank to place)</span>
+          </label>
           <label class="toggle">
             <input id="showNodes" type="checkbox" />
             <span>Show estimated node lines</span>
@@ -127,6 +148,8 @@
           <h2>Predicted Values</h2>
           <p id="metricDeep"></p>
           <p id="metricShallow"></p>
+          <p id="probeReadout"></p>
+          <p id="probePeak"></p>
         </section>
       </aside>
 
@@ -154,6 +177,10 @@
             placeholder="Capture observations, screenshots, and variable changes here..."
           ></textarea>
           <p class="hint">Tip: keep one variable fixed while changing another.</p>
+        </section>
+        <section>
+          <h3>Worksheet Responses</h3>
+          <div id="worksheetForm" class="worksheet-form"></div>
         </section>
       </aside>
     </main>
