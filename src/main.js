@@ -542,8 +542,8 @@ class RippleTank {
     // Source-aware sponge layer:
     // - strong damping near outer boundaries to prevent end-wall reflections
     // - local protection near source geometry so emitters at the border still launch waves
-    const margin = 26;
-    const sourceProtectRadius = 16;
+    const margin = 24;
+    const sourceProtectRadius = 24;
     const sourceProtectRadius2 = sourceProtectRadius * sourceProtectRadius;
 
     const sourceDistance2 = (x, y, source) => {
@@ -585,9 +585,9 @@ class RippleTank {
           maskValue = 1;
         } else {
           const t = clamp(edgeDistance / margin, 0, 1);
-          // Stronger attenuation in sponge band to absorb outgoing energy
-          // before it reaches the hard boundary cells.
-          maskValue = 0.22 + 0.78 * t * t;
+          // Gentle sponge attenuation: absorb near boundaries while preserving
+          // propagation speed and amplitude away from the edges.
+          maskValue = 0.82 + 0.18 * t * t;
         }
 
         if (this.sources.length > 0) {
@@ -601,7 +601,7 @@ class RippleTank {
 
           if (minDist2 < sourceProtectRadius2) {
             const u = Math.sqrt(minDist2) / sourceProtectRadius;
-            const protect = 0.985 - 0.06 * u;
+            const protect = 0.995 - 0.025 * u;
             maskValue = Math.max(maskValue, protect);
           }
         }
