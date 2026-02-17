@@ -542,8 +542,8 @@ class RippleTank {
     // Source-aware sponge layer:
     // - strong damping near outer boundaries to prevent end-wall reflections
     // - local protection near source geometry so emitters at the border still launch waves
-    const margin = 24;
-    const sourceProtectRadius = 24;
+    const margin = 44;
+    const sourceProtectRadius = 34;
     const sourceProtectRadius2 = sourceProtectRadius * sourceProtectRadius;
 
     const sourceDistance2 = (x, y, source) => {
@@ -585,9 +585,9 @@ class RippleTank {
           maskValue = 1;
         } else {
           const t = clamp(edgeDistance / margin, 0, 1);
-          // Gentle sponge attenuation: absorb near boundaries while preserving
-          // propagation speed and amplitude away from the edges.
-          maskValue = 0.82 + 0.18 * t * t;
+          // Strong sponge attenuation toward outer boundaries:
+          // close to 1 in the interior, close to 0 near the edge.
+          maskValue = 0.02 + 0.98 * t * t * t;
         }
 
         if (this.sources.length > 0) {
@@ -601,7 +601,7 @@ class RippleTank {
 
           if (minDist2 < sourceProtectRadius2) {
             const u = Math.sqrt(minDist2) / sourceProtectRadius;
-            const protect = 0.995 - 0.025 * u;
+            const protect = 0.999 - 0.03 * u;
             maskValue = Math.max(maskValue, protect);
           }
         }
@@ -878,28 +878,16 @@ class RippleTank {
       }
     }
 
-    if (useAbsorbingEdges) {
-      const edgeDamp = 0.92;
-      for (let x = 0; x < width; x += 1) {
-        next[x] = next[width + x] * edgeDamp;
-        next[(height - 1) * width + x] = next[(height - 2) * width + x] * edgeDamp;
-      }
+    // Hard boundary at the outermost cells.
+    // In absorbing mode, reflections are suppressed by the sponge mask above.
+    for (let x = 0; x < width; x += 1) {
+      next[x] = 0;
+      next[(height - 1) * width + x] = 0;
+    }
 
-      for (let y = 0; y < height; y += 1) {
-        const row = y * width;
-        next[row] = next[row + 1] * edgeDamp;
-        next[row + width - 1] = next[row + width - 2] * edgeDamp;
-      }
-    } else {
-      for (let x = 0; x < width; x += 1) {
-        next[x] = 0;
-        next[(height - 1) * width + x] = 0;
-      }
-
-      for (let y = 0; y < height; y += 1) {
-        next[y * width] = 0;
-        next[y * width + width - 1] = 0;
-      }
+    for (let y = 0; y < height; y += 1) {
+      next[y * width] = 0;
+      next[y * width + width - 1] = 0;
     }
 
     this.prev = curr;
