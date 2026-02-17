@@ -444,6 +444,13 @@ function getMaxParabolaSpan(geometry) {
   return Math.max(16, Math.min(xLimit, yLimit));
 }
 
+function getParabolaFocusPoint(geometry) {
+  return {
+    x: geometry.centerX,
+    y: geometry.vertexY - 1 / (4 * geometry.curvature)
+  };
+}
+
 function createDefaultGeometryForPreset(presetId, defaults) {
   switch (presetId) {
     case 'diffraction': {
@@ -1898,10 +1905,12 @@ function setupParabolicPreset(frequency, amplitude) {
 
   tank.drawParabolaObstacle(centerX, vertexY, curvature, minX, maxX, 1);
 
-  const focusY = Math.round(vertexY - 1 / (4 * curvature));
+  const focus = getParabolaFocusPoint(geometry);
+  const focusX = Math.round(focus.x);
+  const focusY = Math.round(focus.y);
   if (state.focusSourceMode) {
     tank.addPointSource({
-      x: centerX,
+      x: focusX,
       y: focusY,
       radius: 1,
       frequency,
@@ -1922,6 +1931,17 @@ function setupParabolicPreset(frequency, amplitude) {
   }
 
   state.overlayPoints.push({ x: centerX, y: focusY, style: 'focus' });
+  if (state.focusSourceMode) {
+    for (let y = 14; y <= 28; y += 7) {
+      state.overlayLines.push({
+        x0: 14,
+        y0: y,
+        x1: GRID_WIDTH - 15,
+        y1: y,
+        style: 'guide'
+      });
+    }
+  }
   addEditHandle({ id: 'parabola-move', role: 'parabola-move', x: centerX, y: vertexY });
   addEditHandle({
     id: 'parabola-width-right',
@@ -2470,10 +2490,21 @@ function applyGeometryDrag(gridX, gridY) {
   } else if (role === 'source-point-move') {
     const key = state.preset;
     const startPoint = state.drag.startSourcePoint || state.sourcePointByPreset[key] || { x: gridX, y: gridY };
-    state.sourcePointByPreset[key] = {
+    const nextPoint = {
       x: clamp(startPoint.x + dx, EDIT_MARGIN + 2, GRID_WIDTH - 1 - EDIT_MARGIN - 2),
       y: clamp(startPoint.y + dy, EDIT_MARGIN + 2, GRID_HEIGHT - 1 - EDIT_MARGIN - 2)
     };
+    if (state.preset === 'reflectionParabolic') {
+      const parabola = getPresetGeometry('reflectionParabolic');
+      const focus = getParabolaFocusPoint(parabola);
+      const snapRadius = 7;
+      const dist = Math.hypot(nextPoint.x - focus.x, nextPoint.y - focus.y);
+      if (dist <= snapRadius) {
+        nextPoint.x = focus.x;
+        nextPoint.y = focus.y;
+      }
+    }
+    state.sourcePointByPreset[key] = nextPoint;
   }
 
   syncControlsFromGeometry();
@@ -2522,8 +2553,13 @@ function renderOverlay(theme) {
     }
 
     canvasCtx.shadowBlur = 0;
-    canvasCtx.lineWidth = baseLineWidth * (line.style === 'mediumBoundary' ? 2 : 2.4);
-    canvasCtx.strokeStyle = line.style === 'mediumBoundary' ? 'rgba(126, 225, 215, 0.95)' : theme.line;
+    if (line.style === 'guide') {
+      canvasCtx.lineWidth = baseLineWidth * 1.2;
+      canvasCtx.strokeStyle = 'rgba(229, 204, 143, 0.4)';
+    } else {
+      canvasCtx.lineWidth = baseLineWidth * (line.style === 'mediumBoundary' ? 2 : 2.4);
+      canvasCtx.strokeStyle = line.style === 'mediumBoundary' ? 'rgba(126, 225, 215, 0.95)' : theme.line;
+    }
     canvasCtx.beginPath();
     canvasCtx.moveTo(a.x, a.y);
     canvasCtx.lineTo(b.x, b.y);
