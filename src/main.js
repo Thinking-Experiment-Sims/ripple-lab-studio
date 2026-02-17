@@ -539,19 +539,74 @@ class RippleTank {
   }
 
   buildEdgeMask() {
-    // Keep a light absorbing sponge near edges without suppressing sources
-    // placed close to the border in several presets.
-    const margin = 12;
+    // Source-aware sponge layer:
+    // - strong damping near outer boundaries to prevent end-wall reflections
+    // - local protection near source geometry so emitters at the border still launch waves
+    const margin = 26;
+    const sourceProtectRadius = 16;
+    const sourceProtectRadius2 = sourceProtectRadius * sourceProtectRadius;
+
+    const sourceDistance2 = (x, y, source) => {
+      if (source.kind === 'point') {
+        const dx = x - source.marker.x;
+        const dy = y - source.marker.y;
+        return dx * dx + dy * dy;
+      }
+
+      const x0 = source.marker.x0;
+      const y0 = source.marker.y0;
+      const x1 = source.marker.x1;
+      const y1 = source.marker.y1;
+      const vx = x1 - x0;
+      const vy = y1 - y0;
+      const len2 = vx * vx + vy * vy;
+      if (len2 <= 1e-6) {
+        const dx = x - x0;
+        const dy = y - y0;
+        return dx * dx + dy * dy;
+      }
+
+      const wx = x - x0;
+      const wy = y - y0;
+      const t = clamp((wx * vx + wy * vy) / len2, 0, 1);
+      const px = x0 + vx * t;
+      const py = y0 + vy * t;
+      const dx = x - px;
+      const dy = y - py;
+      return dx * dx + dy * dy;
+    };
+
     for (let y = 0; y < this.height; y += 1) {
       for (let x = 0; x < this.width; x += 1) {
         const edgeDistance = Math.min(x, y, this.width - 1 - x, this.height - 1 - y);
         const i = this.index(x, y);
+        let maskValue = 1;
         if (edgeDistance >= margin) {
-          this.edgeMask[i] = 1;
+          maskValue = 1;
         } else {
           const t = clamp(edgeDistance / margin, 0, 1);
-          this.edgeMask[i] = 0.88 + 0.12 * t * t;
+          // Stronger attenuation in sponge band to absorb outgoing energy
+          // before it reaches the hard boundary cells.
+          maskValue = 0.22 + 0.78 * t * t;
         }
+
+        if (this.sources.length > 0) {
+          let minDist2 = Infinity;
+          for (let s = 0; s < this.sources.length; s += 1) {
+            const d2 = sourceDistance2(x, y, this.sources[s]);
+            if (d2 < minDist2) {
+              minDist2 = d2;
+            }
+          }
+
+          if (minDist2 < sourceProtectRadius2) {
+            const u = Math.sqrt(minDist2) / sourceProtectRadius;
+            const protect = 0.985 - 0.06 * u;
+            maskValue = Math.max(maskValue, protect);
+          }
+        }
+
+        this.edgeMask[i] = maskValue;
       }
     }
   }
@@ -1638,6 +1693,7 @@ function rebuildPresetGeometry() {
       setupDiffractionPreset(frequency, amplitude);
   }
 
+  tank.buildEdgeMask();
   tank.setSourceFrequency(frequency);
   tank.setSourceAmplitude(amplitude);
   syncControlsFromGeometry();
