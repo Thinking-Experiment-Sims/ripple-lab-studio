@@ -18,7 +18,7 @@ const PRESETS = {
     defaults: {
       frequency: 2.8,
       amplitude: 0.95,
-      damping: 0.004,
+      damping: 0,
       speed: 1,
       slitWidth: 28,
       angleControl: 26,
@@ -44,7 +44,7 @@ const PRESETS = {
     defaults: {
       frequency: 2.8,
       amplitude: 0.95,
-      damping: 0.004,
+      damping: 0,
       speed: 1,
       slitWidth: 28,
       angleControl: 26,
@@ -70,7 +70,7 @@ const PRESETS = {
     defaults: {
       frequency: 3.2,
       amplitude: 0.88,
-      damping: 0.004,
+      damping: 0,
       speed: 1,
       slitWidth: 28,
       angleControl: 26,
@@ -96,7 +96,7 @@ const PRESETS = {
     defaults: {
       frequency: 3.1,
       amplitude: 0.88,
-      damping: 0.004,
+      damping: 0,
       speed: 1,
       slitWidth: 28,
       angleControl: 24,
@@ -122,7 +122,7 @@ const PRESETS = {
     defaults: {
       frequency: 2.7,
       amplitude: 0.9,
-      damping: 0.003,
+      damping: 0,
       speed: 1,
       slitWidth: 28,
       angleControl: 24,
@@ -148,7 +148,7 @@ const PRESETS = {
     defaults: {
       frequency: 2.5,
       amplitude: 0.9,
-      damping: 0.004,
+      damping: 0,
       speed: 1,
       slitWidth: 28,
       angleControl: 24,
@@ -174,7 +174,7 @@ const PRESETS = {
     defaults: {
       frequency: 2.9,
       amplitude: 0.9,
-      damping: 0.004,
+      damping: 0,
       speed: 1,
       slitWidth: 28,
       angleControl: 18,
@@ -200,7 +200,7 @@ const PRESETS = {
     defaults: {
       frequency: 4,
       amplitude: 0.92,
-      damping: 0.003,
+      damping: 0,
       speed: 1,
       slitWidth: 28,
       angleControl: 24,
@@ -542,8 +542,8 @@ class RippleTank {
     // Source-aware sponge layer:
     // - strong damping near outer boundaries to prevent end-wall reflections
     // - local protection near source geometry so emitters at the border still launch waves
-    const margin = 44;
-    const sourceProtectRadius = 34;
+    const margin = 28;
+    const sourceProtectRadius = 22;
     const sourceProtectRadius2 = sourceProtectRadius * sourceProtectRadius;
 
     const sourceDistance2 = (x, y, source) => {
@@ -585,9 +585,8 @@ class RippleTank {
           maskValue = 1;
         } else {
           const t = clamp(edgeDistance / margin, 0, 1);
-          // Strong sponge attenuation toward outer boundaries:
-          // close to 1 in the interior, close to 0 near the edge.
-          maskValue = 0.02 + 0.98 * t * t * t;
+          // Gentle per-step attenuation that compounds through the sponge band.
+          maskValue = 0.86 + 0.14 * t * t;
         }
 
         if (this.sources.length > 0) {
@@ -601,7 +600,7 @@ class RippleTank {
 
           if (minDist2 < sourceProtectRadius2) {
             const u = Math.sqrt(minDist2) / sourceProtectRadius;
-            const protect = 0.999 - 0.03 * u;
+            const protect = 0.998 - 0.02 * u;
             maskValue = Math.max(maskValue, protect);
           }
         }
@@ -872,8 +871,7 @@ class RippleTank {
         }
 
         const laplacian = curr[i - 1] + curr[i + 1] + curr[i - width] + curr[i + width] - 4 * curr[i];
-        const edgeScale = useAbsorbingEdges ? edgeMask[i] : 1;
-        const value = (2 * curr[i] - prev[i] + medium[i] * laplacian) * damping * edgeScale;
+        const value = (2 * curr[i] - prev[i] + medium[i] * laplacian) * damping;
         next[i] = value;
       }
     }
@@ -896,6 +894,15 @@ class RippleTank {
 
     this.injectSources();
     this.enforceObstaclesAndAverages();
+    if (useAbsorbingEdges) {
+      // Apply sponge attenuation after wave update/injection so sources keep
+      // launching energy while outgoing fronts are damped near edges.
+      for (let i = 0; i < this.size; i += 1) {
+        const m = edgeMask[i];
+        this.curr[i] *= m;
+        this.prev[i] *= m;
+      }
+    }
     this.time += dt;
   }
 }
