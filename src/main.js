@@ -451,6 +451,101 @@ function getParabolaFocusPoint(geometry) {
   };
 }
 
+function normalizeVector(vector) {
+  const len = Math.hypot(vector.x, vector.y);
+  if (len <= 1e-6) {
+    return { x: 0, y: 0 };
+  }
+  return { x: vector.x / len, y: vector.y / len };
+}
+
+function dotVector(a, b) {
+  return a.x * b.x + a.y * b.y;
+}
+
+function crossVector(a, b) {
+  return a.x * b.y - a.y * b.x;
+}
+
+function reflectVector(direction, normal) {
+  const d = normalizeVector(direction);
+  const n = normalizeVector(normal);
+  const dn = dotVector(d, n);
+  return normalizeVector({
+    x: d.x - 2 * dn * n.x,
+    y: d.y - 2 * dn * n.y
+  });
+}
+
+function intersectRayWithSegment(origin, direction, segment) {
+  const p = origin;
+  const r = direction;
+  const q = { x: segment.x0, y: segment.y0 };
+  const s = { x: segment.x1 - segment.x0, y: segment.y1 - segment.y0 };
+  const denom = crossVector(r, s);
+  if (Math.abs(denom) < 1e-6) {
+    return null;
+  }
+
+  const qp = { x: q.x - p.x, y: q.y - p.y };
+  const t = crossVector(qp, s) / denom;
+  const u = crossVector(qp, r) / denom;
+
+  if (t >= 0 && u >= 0 && u <= 1) {
+    return {
+      x: p.x + r.x * t,
+      y: p.y + r.y * t,
+      t,
+      u
+    };
+  }
+  return null;
+}
+
+function refractDirection(direction, normalToMedium2, speed1, speed2) {
+  let n = normalizeVector(normalToMedium2);
+  let c1 = speed1;
+  let c2 = speed2;
+  const d = normalizeVector(direction);
+
+  if (dotVector(d, n) < 0) {
+    n = { x: -n.x, y: -n.y };
+    c1 = speed2;
+    c2 = speed1;
+  }
+
+  const dNormal = dotVector(d, n);
+  const tangent = { x: d.x - n.x * dNormal, y: d.y - n.y * dNormal };
+  const sinTheta1 = Math.hypot(tangent.x, tangent.y);
+  if (sinTheta1 <= 1e-6) {
+    return { x: n.x, y: n.y };
+  }
+
+  const eta = c2 / Math.max(1e-6, c1);
+  const sinTheta2 = eta * sinTheta1;
+  if (sinTheta2 >= 1) {
+    return null;
+  }
+
+  const tangentHat = { x: tangent.x / sinTheta1, y: tangent.y / sinTheta1 };
+  const cosTheta2 = Math.sqrt(1 - sinTheta2 * sinTheta2);
+
+  return normalizeVector({
+    x: tangentHat.x * sinTheta2 + n.x * cosTheta2,
+    y: tangentHat.y * sinTheta2 + n.y * cosTheta2
+  });
+}
+
+function isRayAidPreset(presetId = state.preset) {
+  return (
+    presetId === 'reflectionFlat' ||
+    presetId === 'reflectionDiagonal' ||
+    presetId === 'reflectionParabolic' ||
+    presetId === 'refractionBoundary' ||
+    presetId === 'refractionAngled'
+  );
+}
+
 function createDefaultGeometryForPreset(presetId, defaults) {
   switch (presetId) {
     case 'diffraction': {
@@ -947,6 +1042,8 @@ const elements = {
   viewMode: document.getElementById('viewMode'),
   boundaryMode: document.getElementById('boundaryMode'),
   probeEnabled: document.getElementById('probeEnabled'),
+  showRayAid: document.getElementById('showRayAid'),
+  rayAidToggleWrap: document.getElementById('rayAidToggleWrap'),
   showNodes: document.getElementById('showNodes'),
   reducedMotion: document.getElementById('reducedMotion'),
   saveScreenshotBtn: document.getElementById('saveScreenshotBtn'),
@@ -982,6 +1079,7 @@ const state = {
   boundaryMode: 'absorb',
   running: false,
   showNodes: false,
+  showRayAid: false,
   reducedMotion: false,
   focusSourceMode: false,
   camera: {
@@ -999,6 +1097,7 @@ const state = {
   overlayLines: [],
   overlayPoints: [],
   overlayRects: [],
+  overlayArcs: [],
   editHandles: [],
   hoveredHandleId: null,
   geometry: {},
@@ -1450,6 +1549,182 @@ function addLineEditHandles(idPrefix, segment) {
   addEditHandle({ id: `${idPrefix}-move`, role: `${idPrefix}-move`, x: midpoint.x, y: midpoint.y });
 }
 
+function addAngleArc(center, fromVector, toVector, radius, style) {
+  const from = normalizeVector(fromVector);
+  const to = normalizeVector(toVector);
+  const start = Math.atan2(from.y, from.x);
+  const endRaw = Math.atan2(to.y, to.x);
+  let delta = endRaw - start;
+  while (delta > Math.PI) {
+    delta -= TWO_PI;
+  }
+  while (delta < -Math.PI) {
+    delta += TWO_PI;
+  }
+
+  state.overlayArcs.push({
+    x: center.x,
+    y: center.y,
+    radius,
+    startAngle: start,
+    endAngle: start + delta,
+    anticlockwise: delta < 0,
+    style
+  });
+}
+
+function addReflectionRayAid(incidentOrigin, incidencePoint, normalVector, reflectedVector) {
+  const incidentDir = normalizeVector({
+    x: incidencePoint.x - incidentOrigin.x,
+    y: incidencePoint.y - incidentOrigin.y
+  });
+  const incidentBack = { x: -incidentDir.x, y: -incidentDir.y };
+  const normalFacing = dotVector(incidentBack, normalVector) >= 0 ? normalVector : { x: -normalVector.x, y: -normalVector.y };
+  const reflected = normalizeVector(reflectedVector);
+
+  state.overlayLines.push({
+    x0: incidentOrigin.x,
+    y0: incidentOrigin.y,
+    x1: incidencePoint.x,
+    y1: incidencePoint.y,
+    style: 'incidentRay'
+  });
+  state.overlayLines.push({
+    x0: incidencePoint.x,
+    y0: incidencePoint.y,
+    x1: incidencePoint.x + reflected.x * 90,
+    y1: incidencePoint.y + reflected.y * 90,
+    style: 'reflectedRay'
+  });
+  state.overlayLines.push({
+    x0: incidencePoint.x - normalFacing.x * 20,
+    y0: incidencePoint.y - normalFacing.y * 20,
+    x1: incidencePoint.x + normalFacing.x * 20,
+    y1: incidencePoint.y + normalFacing.y * 20,
+    style: 'normalRay'
+  });
+
+  addAngleArc(incidencePoint, normalFacing, incidentBack, 8, 'angleIncident');
+  addAngleArc(incidencePoint, normalFacing, reflected, 11, 'angleReflected');
+}
+
+function addRefractionRayAid(incidentOrigin, incidencePoint, normalToMedium2, speed1, speed2) {
+  const incidentDir = normalizeVector({
+    x: incidencePoint.x - incidentOrigin.x,
+    y: incidencePoint.y - incidentOrigin.y
+  });
+  const transmitted = refractDirection(incidentDir, normalToMedium2, speed1, speed2);
+  const normalIncSide = { x: -normalToMedium2.x, y: -normalToMedium2.y };
+  const incidentBack = { x: -incidentDir.x, y: -incidentDir.y };
+
+  state.overlayLines.push({
+    x0: incidentOrigin.x,
+    y0: incidentOrigin.y,
+    x1: incidencePoint.x,
+    y1: incidencePoint.y,
+    style: 'incidentRay'
+  });
+  state.overlayLines.push({
+    x0: incidencePoint.x - normalToMedium2.x * 22,
+    y0: incidencePoint.y - normalToMedium2.y * 22,
+    x1: incidencePoint.x + normalToMedium2.x * 22,
+    y1: incidencePoint.y + normalToMedium2.y * 22,
+    style: 'normalRay'
+  });
+  addAngleArc(incidencePoint, normalIncSide, incidentBack, 8, 'angleIncident');
+
+  if (transmitted) {
+    state.overlayLines.push({
+      x0: incidencePoint.x,
+      y0: incidencePoint.y,
+      x1: incidencePoint.x + transmitted.x * 90,
+      y1: incidencePoint.y + transmitted.y * 90,
+      style: 'refractedRay'
+    });
+    addAngleArc(incidencePoint, normalToMedium2, transmitted, 11, 'angleRefracted');
+  }
+}
+
+function addRayAidOverlay() {
+  const sourceCenter = { x: 8, y: GRID_HEIGHT * 0.5 };
+
+  if (state.preset === 'reflectionFlat' || state.preset === 'reflectionDiagonal') {
+    const geometry = getPresetGeometry();
+    const segment = geometry.line;
+    const origin = { x: GRID_WIDTH * 0.5, y: 9 };
+    const incidentDir = { x: 0, y: 1 };
+    const hit =
+      intersectRayWithSegment(origin, incidentDir, segment) ||
+      segmentMidpoint(segment);
+    const tangent = normalizeVector({ x: segment.x1 - segment.x0, y: segment.y1 - segment.y0 });
+    const normal = normalizeVector({ x: -tangent.y, y: tangent.x });
+    const reflected = reflectVector(incidentDir, normal);
+    addReflectionRayAid(origin, hit, normal, reflected);
+    return;
+  }
+
+  if (state.preset === 'reflectionParabolic') {
+    const geometry = getPresetGeometry();
+    const offsetX = geometry.halfSpan * 0.44;
+    const hitX = geometry.centerX + offsetX;
+    const dx = hitX - geometry.centerX;
+    const hitY = -geometry.curvature * dx * dx + geometry.vertexY;
+    const incidencePoint = { x: hitX, y: hitY };
+    const tangentSlope = -2 * geometry.curvature * dx;
+    const normal = normalizeVector({ x: -tangentSlope, y: 1 });
+    let incidentOrigin;
+    if (state.focusSourceMode) {
+      incidentOrigin = getParabolaFocusPoint(geometry);
+    } else {
+      incidentOrigin = { x: hitX, y: 9 };
+    }
+    const incidentDir = normalizeVector({
+      x: incidencePoint.x - incidentOrigin.x,
+      y: incidencePoint.y - incidentOrigin.y
+    });
+    const reflected = reflectVector(incidentDir, normal);
+    addReflectionRayAid(incidentOrigin, incidencePoint, normal, reflected);
+    return;
+  }
+
+  if (state.preset === 'refractionBoundary') {
+    const geometry = getPresetGeometry();
+    const incidencePoint = { x: geometry.boundaryX, y: sourceCenter.y };
+    const normal = { x: 1, y: 0 };
+    const deep = tank.baseSpeed;
+    const shallow = deep * Number(elements.mediumRatio.value);
+    addRefractionRayAid(sourceCenter, incidencePoint, normal, deep, shallow);
+    return;
+  }
+
+  if (state.preset === 'refractionAngled') {
+    const geometry = getPresetGeometry();
+    const boundary = geometry.boundary;
+    const hit =
+      intersectRayWithSegment(sourceCenter, { x: 1, y: 0 }, boundary) ||
+      segmentMidpoint(boundary);
+    const tangent = normalizeVector({ x: boundary.x1 - boundary.x0, y: boundary.y1 - boundary.y0 });
+    const baseNormal = normalizeVector({ x: -tangent.y, y: tangent.x });
+    const mid = segmentMidpoint(boundary);
+    const sourceSide = (sourceCenter.x - mid.x) * baseNormal.x + (sourceCenter.y - mid.y) * baseNormal.y;
+    const deep = tank.baseSpeed;
+    const shallow = deep * Number(elements.mediumRatio.value);
+    let normalToMedium2;
+    let speed1;
+    let speed2;
+    if (sourceSide >= 0) {
+      normalToMedium2 = { x: -baseNormal.x, y: -baseNormal.y };
+      speed1 = shallow;
+      speed2 = deep;
+    } else {
+      normalToMedium2 = baseNormal;
+      speed1 = deep;
+      speed2 = shallow;
+    }
+    addRefractionRayAid(sourceCenter, hit, normalToMedium2, speed1, speed2);
+  }
+}
+
 function getPointSourcePositionForCurrentPreset(defaultX, defaultY) {
   const key = state.preset;
   if (!state.sourcePointByPreset[key]) {
@@ -1623,6 +1898,13 @@ function updateControlVisibility() {
     elements.focusSourceBtn.classList.remove('is-active');
     elements.focusSourceBtn.textContent = 'Use Focus Source';
   }
+
+  const rayAidVisible = isRayAidPreset();
+  elements.rayAidToggleWrap.style.display = rayAidVisible ? '' : 'none';
+  if (!rayAidVisible) {
+    state.showRayAid = false;
+    elements.showRayAid.checked = false;
+  }
 }
 
 function updateMetrics() {
@@ -1681,6 +1963,7 @@ function rebuildPresetGeometry() {
   state.overlayLines = [];
   state.overlayPoints = [];
   state.overlayRects = [];
+  state.overlayArcs = [];
   state.editHandles = [];
 
   syncGeometryFromControls();
@@ -1712,6 +1995,10 @@ function rebuildPresetGeometry() {
       break;
     default:
       setupDiffractionPreset(frequency, amplitude);
+  }
+
+  if (state.showRayAid && isRayAidPreset()) {
+    addRayAidOverlay();
   }
 
   tank.buildEdgeMask();
@@ -2108,6 +2395,10 @@ function applyPreset(presetId) {
   state.sourceMode = elements.sourceMode.value;
   state.boundaryMode = elements.boundaryMode.value;
   state.showNodes = defaults.showNodes;
+  if (!isRayAidPreset(presetId)) {
+    state.showRayAid = false;
+  }
+  elements.showRayAid.checked = state.showRayAid;
   state.viewMode = defaults.viewMode || 'top';
   state.focusSourceMode = false;
   elements.focusSourceBtn.classList.remove('is-active');
@@ -2531,6 +2822,7 @@ function renderOverlay(theme) {
     const line = state.overlayLines[i];
     const a = mapPoint(line.x0, line.y0);
     const b = mapPoint(line.x1, line.y1);
+    canvasCtx.setLineDash([]);
 
     if (line.style === 'mirror') {
       canvasCtx.strokeStyle = 'rgba(228, 239, 246, 0.92)';
@@ -2553,10 +2845,23 @@ function renderOverlay(theme) {
     }
 
     canvasCtx.shadowBlur = 0;
-    if (line.style === 'guide') {
+    if (line.style === 'incidentRay' || line.style === 'reflectedRay' || line.style === 'refractedRay' || line.style === 'normalRay') {
+      canvasCtx.setLineDash(line.style === 'normalRay' ? [5, 4] : [8, 5]);
+      canvasCtx.lineWidth = baseLineWidth * 1.6;
+      if (line.style === 'incidentRay') {
+        canvasCtx.strokeStyle = 'rgba(229, 204, 143, 0.95)';
+      } else if (line.style === 'reflectedRay') {
+        canvasCtx.strokeStyle = 'rgba(126, 225, 215, 0.95)';
+      } else if (line.style === 'refractedRay') {
+        canvasCtx.strokeStyle = 'rgba(255, 198, 117, 0.95)';
+      } else {
+        canvasCtx.strokeStyle = 'rgba(231, 238, 244, 0.78)';
+      }
+    } else if (line.style === 'guide') {
       canvasCtx.lineWidth = baseLineWidth * 1.2;
       canvasCtx.strokeStyle = 'rgba(229, 204, 143, 0.4)';
     } else {
+      canvasCtx.setLineDash([]);
       canvasCtx.lineWidth = baseLineWidth * (line.style === 'mediumBoundary' ? 2 : 2.4);
       canvasCtx.strokeStyle = line.style === 'mediumBoundary' ? 'rgba(126, 225, 215, 0.95)' : theme.line;
     }
@@ -2564,6 +2869,27 @@ function renderOverlay(theme) {
     canvasCtx.moveTo(a.x, a.y);
     canvasCtx.lineTo(b.x, b.y);
     canvasCtx.stroke();
+  }
+
+  canvasCtx.setLineDash([]);
+  if (!is3D) {
+    for (let i = 0; i < state.overlayArcs.length; i += 1) {
+      const arc = state.overlayArcs[i];
+      const centerX = toCanvasX(arc.x);
+      const centerY = toCanvasY(arc.y);
+      const radius = (arc.radius / GRID_WIDTH) * elements.tankCanvas.width;
+      canvasCtx.lineWidth = baseLineWidth * 1.5;
+      if (arc.style === 'angleRefracted') {
+        canvasCtx.strokeStyle = 'rgba(255, 198, 117, 0.92)';
+      } else if (arc.style === 'angleReflected') {
+        canvasCtx.strokeStyle = 'rgba(126, 225, 215, 0.92)';
+      } else {
+        canvasCtx.strokeStyle = 'rgba(229, 204, 143, 0.92)';
+      }
+      canvasCtx.beginPath();
+      canvasCtx.arc(centerX, centerY, radius, arc.startAngle, arc.endAngle, arc.anticlockwise);
+      canvasCtx.stroke();
+    }
   }
 
   for (let i = 0; i < state.overlayRects.length; i += 1) {
@@ -2743,6 +3069,11 @@ function bindEvents() {
     state.probe.peak = 0;
     state.probe.history = [];
     updateProbeMetrics();
+  });
+
+  elements.showRayAid.addEventListener('change', () => {
+    state.showRayAid = elements.showRayAid.checked;
+    state.needsRebuild = true;
   });
 
   elements.playBtn.addEventListener('click', () => {
