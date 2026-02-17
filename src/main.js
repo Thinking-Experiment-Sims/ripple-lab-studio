@@ -995,6 +995,7 @@ const state = {
   editHandles: [],
   hoveredHandleId: null,
   geometry: {},
+  sourcePointByPreset: {},
   drag: null,
   pointer: null,
   needsRebuild: false,
@@ -1161,7 +1162,7 @@ function buildSettingsList() {
   ];
 
   if (state.preset === 'diffraction') {
-    rows.push(`Slit width: ${elements.slitWidth.value}px`);
+    rows.push(`Slit width: ${elements.slitWidth.value} cm`);
   }
   if (state.preset === 'diffractionWall') {
     rows.push(`Wall size: ${elements.wallWidth.value}px x ${elements.wallHeight.value}px`);
@@ -1442,6 +1443,17 @@ function addLineEditHandles(idPrefix, segment) {
   addEditHandle({ id: `${idPrefix}-move`, role: `${idPrefix}-move`, x: midpoint.x, y: midpoint.y });
 }
 
+function getPointSourcePositionForCurrentPreset(defaultX, defaultY) {
+  const key = state.preset;
+  if (!state.sourcePointByPreset[key]) {
+    state.sourcePointByPreset[key] = {
+      x: clamp(defaultX, EDIT_MARGIN + 2, GRID_WIDTH - 1 - EDIT_MARGIN - 2),
+      y: clamp(defaultY, EDIT_MARGIN + 2, GRID_HEIGHT - 1 - EDIT_MARGIN - 2)
+    };
+  }
+  return state.sourcePointByPreset[key];
+}
+
 function addConfiguredSourceFromLine(line, frequency, amplitude) {
   const mode = state.sourceMode;
   const x0 = line.x0;
@@ -1456,15 +1468,22 @@ function addConfiguredSourceFromLine(line, frequency, amplitude) {
   const perpY = dirX / length;
 
   if (mode === 'point') {
+    const sourcePoint = getPointSourcePositionForCurrentPreset(midpoint.x, midpoint.y);
     tank.addPointSource({
-      x: midpoint.x,
-      y: midpoint.y,
+      x: sourcePoint.x,
+      y: sourcePoint.y,
       radius: 1,
       frequency,
       amplitude,
       relativeAmplitude: 1
     });
-    state.overlayPoints.push({ x: midpoint.x, y: midpoint.y, style: 'source' });
+    state.overlayPoints.push({ x: sourcePoint.x, y: sourcePoint.y, style: 'source' });
+    addEditHandle({
+      id: 'source-point-move',
+      role: 'source-point-move',
+      x: sourcePoint.x,
+      y: sourcePoint.y
+    });
     return;
   }
 
@@ -1556,7 +1575,7 @@ function updateRangeLabels() {
   elements.amplitudeValue.textContent = formatNumber(elements.amplitude.value, 2);
   elements.dampingValue.textContent = `${formatNumber(Number(elements.damping.value) * 100, 1)}%`;
   elements.speedValue.textContent = `${formatNumber(elements.speed.value, 2)}x`;
-  elements.slitWidthValue.textContent = `${elements.slitWidth.value} px`;
+  elements.slitWidthValue.textContent = `${elements.slitWidth.value} cm`;
   elements.angleValue.textContent = `${elements.angleControl.value}°`;
   elements.mediumRatioValue.textContent = `${Math.round(Number(elements.mediumRatio.value) * 100)}%`;
   elements.separationValue.textContent = `${elements.separation.value} px`;
@@ -2046,6 +2065,7 @@ function applyPreset(presetId) {
   const preset = PRESETS[presetId];
   const defaults = preset.defaults;
   resetGeometryForPreset(presetId);
+  delete state.sourcePointByPreset[presetId];
   state.drag = null;
   state.hoveredHandleId = null;
 
@@ -2447,6 +2467,13 @@ function applyGeometryDrag(gridX, gridY) {
   } else if (role === 'interference-source-2') {
     geometry.source2.x = clamp(gridX, EDIT_MARGIN + 4, GRID_WIDTH - 1 - EDIT_MARGIN - 4);
     geometry.source2.y = clamp(gridY, EDIT_MARGIN + 4, GRID_HEIGHT - 1 - EDIT_MARGIN - 4);
+  } else if (role === 'source-point-move') {
+    const key = state.preset;
+    const startPoint = state.drag.startSourcePoint || state.sourcePointByPreset[key] || { x: gridX, y: gridY };
+    state.sourcePointByPreset[key] = {
+      x: clamp(startPoint.x + dx, EDIT_MARGIN + 2, GRID_WIDTH - 1 - EDIT_MARGIN - 2),
+      y: clamp(startPoint.y + dy, EDIT_MARGIN + 2, GRID_HEIGHT - 1 - EDIT_MARGIN - 2)
+    };
   }
 
   syncControlsFromGeometry();
@@ -2823,7 +2850,11 @@ function bindEvents() {
         role,
         startGridX: pointer.gridX,
         startGridY: pointer.gridY,
-        startGeometry: deepCopy(getPresetGeometry())
+        startGeometry: deepCopy(getPresetGeometry()),
+        startSourcePoint:
+          role === 'source-point-move' && state.sourcePointByPreset[state.preset]
+            ? deepCopy(state.sourcePointByPreset[state.preset])
+            : null
       };
       elements.tankCanvas.setPointerCapture(event.pointerId);
       elements.tankCanvas.style.cursor = 'grabbing';
