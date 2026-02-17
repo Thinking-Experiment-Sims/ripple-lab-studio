@@ -18,7 +18,7 @@ const PRESETS = {
     defaults: {
       frequency: 2.8,
       amplitude: 0.95,
-      damping: 0.004,
+      damping: 0,
       speed: 1,
       slitWidth: 28,
       angleControl: 26,
@@ -44,7 +44,7 @@ const PRESETS = {
     defaults: {
       frequency: 2.8,
       amplitude: 0.95,
-      damping: 0.004,
+      damping: 0,
       speed: 1,
       slitWidth: 28,
       angleControl: 26,
@@ -70,7 +70,7 @@ const PRESETS = {
     defaults: {
       frequency: 3.2,
       amplitude: 0.88,
-      damping: 0.004,
+      damping: 0,
       speed: 1,
       slitWidth: 28,
       angleControl: 26,
@@ -96,7 +96,7 @@ const PRESETS = {
     defaults: {
       frequency: 3.1,
       amplitude: 0.88,
-      damping: 0.004,
+      damping: 0,
       speed: 1,
       slitWidth: 28,
       angleControl: 24,
@@ -122,7 +122,7 @@ const PRESETS = {
     defaults: {
       frequency: 2.7,
       amplitude: 0.9,
-      damping: 0.003,
+      damping: 0,
       speed: 1,
       slitWidth: 28,
       angleControl: 24,
@@ -148,7 +148,7 @@ const PRESETS = {
     defaults: {
       frequency: 2.5,
       amplitude: 0.9,
-      damping: 0.004,
+      damping: 0,
       speed: 1,
       slitWidth: 28,
       angleControl: 24,
@@ -174,7 +174,7 @@ const PRESETS = {
     defaults: {
       frequency: 2.9,
       amplitude: 0.9,
-      damping: 0.004,
+      damping: 0,
       speed: 1,
       slitWidth: 28,
       angleControl: 18,
@@ -200,7 +200,7 @@ const PRESETS = {
     defaults: {
       frequency: 4,
       amplitude: 0.92,
-      damping: 0.003,
+      damping: 0,
       speed: 1,
       slitWidth: 28,
       angleControl: 24,
@@ -539,19 +539,73 @@ class RippleTank {
   }
 
   buildEdgeMask() {
-    // Keep a light absorbing sponge near edges without suppressing sources
-    // placed close to the border in several presets.
-    const margin = 12;
+    // Source-aware sponge layer:
+    // - strong damping near outer boundaries to prevent end-wall reflections
+    // - local protection near source geometry so emitters at the border still launch waves
+    const margin = 28;
+    const sourceProtectRadius = 22;
+    const sourceProtectRadius2 = sourceProtectRadius * sourceProtectRadius;
+
+    const sourceDistance2 = (x, y, source) => {
+      if (source.kind === 'point') {
+        const dx = x - source.marker.x;
+        const dy = y - source.marker.y;
+        return dx * dx + dy * dy;
+      }
+
+      const x0 = source.marker.x0;
+      const y0 = source.marker.y0;
+      const x1 = source.marker.x1;
+      const y1 = source.marker.y1;
+      const vx = x1 - x0;
+      const vy = y1 - y0;
+      const len2 = vx * vx + vy * vy;
+      if (len2 <= 1e-6) {
+        const dx = x - x0;
+        const dy = y - y0;
+        return dx * dx + dy * dy;
+      }
+
+      const wx = x - x0;
+      const wy = y - y0;
+      const t = clamp((wx * vx + wy * vy) / len2, 0, 1);
+      const px = x0 + vx * t;
+      const py = y0 + vy * t;
+      const dx = x - px;
+      const dy = y - py;
+      return dx * dx + dy * dy;
+    };
+
     for (let y = 0; y < this.height; y += 1) {
       for (let x = 0; x < this.width; x += 1) {
         const edgeDistance = Math.min(x, y, this.width - 1 - x, this.height - 1 - y);
         const i = this.index(x, y);
+        let maskValue = 1;
         if (edgeDistance >= margin) {
-          this.edgeMask[i] = 1;
+          maskValue = 1;
         } else {
           const t = clamp(edgeDistance / margin, 0, 1);
-          this.edgeMask[i] = 0.88 + 0.12 * t * t;
+          // Gentle per-step attenuation that compounds through the sponge band.
+          maskValue = 0.86 + 0.14 * t * t;
         }
+
+        if (this.sources.length > 0) {
+          let minDist2 = Infinity;
+          for (let s = 0; s < this.sources.length; s += 1) {
+            const d2 = sourceDistance2(x, y, this.sources[s]);
+            if (d2 < minDist2) {
+              minDist2 = d2;
+            }
+          }
+
+          if (minDist2 < sourceProtectRadius2) {
+            const u = Math.sqrt(minDist2) / sourceProtectRadius;
+            const protect = 0.998 - 0.02 * u;
+            maskValue = Math.max(maskValue, protect);
+          }
+        }
+
+        this.edgeMask[i] = maskValue;
       }
     }
   }
@@ -817,34 +871,21 @@ class RippleTank {
         }
 
         const laplacian = curr[i - 1] + curr[i + 1] + curr[i - width] + curr[i + width] - 4 * curr[i];
-        const edgeScale = useAbsorbingEdges ? edgeMask[i] : 1;
-        const value = (2 * curr[i] - prev[i] + medium[i] * laplacian) * damping * edgeScale;
+        const value = (2 * curr[i] - prev[i] + medium[i] * laplacian) * damping;
         next[i] = value;
       }
     }
 
-    if (useAbsorbingEdges) {
-      const edgeDamp = 0.92;
-      for (let x = 0; x < width; x += 1) {
-        next[x] = next[width + x] * edgeDamp;
-        next[(height - 1) * width + x] = next[(height - 2) * width + x] * edgeDamp;
-      }
+    // Hard boundary at the outermost cells.
+    // In absorbing mode, reflections are suppressed by the sponge mask above.
+    for (let x = 0; x < width; x += 1) {
+      next[x] = 0;
+      next[(height - 1) * width + x] = 0;
+    }
 
-      for (let y = 0; y < height; y += 1) {
-        const row = y * width;
-        next[row] = next[row + 1] * edgeDamp;
-        next[row + width - 1] = next[row + width - 2] * edgeDamp;
-      }
-    } else {
-      for (let x = 0; x < width; x += 1) {
-        next[x] = 0;
-        next[(height - 1) * width + x] = 0;
-      }
-
-      for (let y = 0; y < height; y += 1) {
-        next[y * width] = 0;
-        next[y * width + width - 1] = 0;
-      }
+    for (let y = 0; y < height; y += 1) {
+      next[y * width] = 0;
+      next[y * width + width - 1] = 0;
     }
 
     this.prev = curr;
@@ -853,6 +894,15 @@ class RippleTank {
 
     this.injectSources();
     this.enforceObstaclesAndAverages();
+    if (useAbsorbingEdges) {
+      // Apply sponge attenuation after wave update/injection so sources keep
+      // launching energy while outgoing fronts are damped near edges.
+      for (let i = 0; i < this.size; i += 1) {
+        const m = edgeMask[i];
+        this.curr[i] *= m;
+        this.prev[i] *= m;
+      }
+    }
     this.time += dt;
   }
 }
@@ -1638,6 +1688,7 @@ function rebuildPresetGeometry() {
       setupDiffractionPreset(frequency, amplitude);
   }
 
+  tank.buildEdgeMask();
   tank.setSourceFrequency(frequency);
   tank.setSourceAmplitude(amplitude);
   syncControlsFromGeometry();
