@@ -1045,6 +1045,7 @@ const elements = {
   showRayAid: document.getElementById('showRayAid'),
   rayAidToggleWrap: document.getElementById('rayAidToggleWrap'),
   showNodes: document.getElementById('showNodes'),
+  measureEnabled: document.getElementById('measureEnabled'),
   reducedMotion: document.getElementById('reducedMotion'),
   saveScreenshotBtn: document.getElementById('saveScreenshotBtn'),
   saveReportBtn: document.getElementById('saveReportBtn'),
@@ -1052,6 +1053,7 @@ const elements = {
   metricShallow: document.getElementById('metricShallow'),
   probeReadout: document.getElementById('probeReadout'),
   probePeak: document.getElementById('probePeak'),
+  measureReadout: document.getElementById('measureReadout'),
   statusLine: document.getElementById('statusLine'),
   guideTitle: document.getElementById('guideTitle'),
   guideConcept: document.getElementById('guideConcept'),
@@ -1092,6 +1094,11 @@ const state = {
     y: GRID_HEIGHT * 0.5,
     peak: 0,
     history: []
+  },
+  ruler: {
+    enabled: false,
+    p1: null,
+    p2: null
   },
   worksheetAnswers: {},
   overlayLines: [],
@@ -1189,6 +1196,74 @@ function updateProbeMetrics() {
   elements.probePeak.textContent = `Probe peak |A|=${formatNumber(state.probe.peak, 3)}`;
 }
 
+function setRulerPoint(which, x, y) {
+  const point = {
+    x: clamp(x, 0, GRID_WIDTH - 1),
+    y: clamp(y, 0, GRID_HEIGHT - 1)
+  };
+  if (which === 'p1') {
+    state.ruler.p1 = point;
+  } else {
+    state.ruler.p2 = point;
+  }
+}
+
+function getRulerHandleHit(canvasX, canvasY) {
+  if (!state.ruler.enabled || state.viewMode === 'surface3d') {
+    return null;
+  }
+  const r2 = 10 * 10;
+  if (state.ruler.p1) {
+    const x1 = toCanvasX(state.ruler.p1.x);
+    const y1 = toCanvasY(state.ruler.p1.y);
+    const d1x = canvasX - x1;
+    const d1y = canvasY - y1;
+    if (d1x * d1x + d1y * d1y <= r2) {
+      return 'ruler-a';
+    }
+  }
+  if (state.ruler.p2) {
+    const x2 = toCanvasX(state.ruler.p2.x);
+    const y2 = toCanvasY(state.ruler.p2.y);
+    const d2x = canvasX - x2;
+    const d2y = canvasY - y2;
+    if (d2x * d2x + d2y * d2y <= r2) {
+      return 'ruler-b';
+    }
+  }
+  return null;
+}
+
+function placeRulerPoint(x, y) {
+  if (!state.ruler.p1 || (state.ruler.p1 && state.ruler.p2)) {
+    setRulerPoint('p1', x, y);
+    state.ruler.p2 = null;
+    return;
+  }
+  setRulerPoint('p2', x, y);
+}
+
+function updateMeasureReadout() {
+  if (!state.ruler.enabled) {
+    elements.measureReadout.textContent = 'Ruler: off';
+    return;
+  }
+
+  if (!state.ruler.p1) {
+    elements.measureReadout.textContent = 'Ruler: click first point';
+    return;
+  }
+  if (!state.ruler.p2) {
+    elements.measureReadout.textContent = 'Ruler: click second point';
+    return;
+  }
+
+  const dx = state.ruler.p2.x - state.ruler.p1.x;
+  const dy = state.ruler.p2.y - state.ruler.p1.y;
+  const dist = Math.hypot(dx, dy);
+  elements.measureReadout.textContent = `Distance: ${formatNumber(dist, 1)} cm`;
+}
+
 function renderWorksheetForm() {
   const root = elements.worksheetForm;
   root.textContent = '';
@@ -1280,7 +1355,7 @@ function buildSettingsList() {
     rows.push(`Shallow medium ratio: ${elements.mediumRatio.value}`);
   }
   if (state.preset === 'interference') {
-    rows.push(`Source separation: ${elements.separation.value}px`);
+    rows.push(`Source separation: ${elements.separation.value} cm`);
   }
   if (state.probe.enabled) {
     rows.push(`Probe location: (${Math.round(state.probe.x)}, ${Math.round(state.probe.y)})`);
@@ -1860,7 +1935,7 @@ function updateRangeLabels() {
   elements.slitWidthValue.textContent = `${elements.slitWidth.value} cm`;
   elements.angleValue.textContent = `${elements.angleControl.value}°`;
   elements.mediumRatioValue.textContent = `${Math.round(Number(elements.mediumRatio.value) * 100)}%`;
-  elements.separationValue.textContent = `${elements.separation.value} px`;
+  elements.separationValue.textContent = `${elements.separation.value} cm`;
   elements.wallWidthValue.textContent = `${elements.wallWidth.value} px`;
   elements.wallHeightValue.textContent = `${elements.wallHeight.value} px`;
 }
@@ -1923,6 +1998,7 @@ function updateMetrics() {
   }
 
   updateProbeMetrics();
+  updateMeasureReadout();
 }
 
 function updateStatus() {
@@ -2959,6 +3035,44 @@ function renderOverlay(theme) {
     }
   }
 
+  if (!is3D && state.ruler.enabled && state.ruler.p1) {
+    const p1x = toCanvasX(state.ruler.p1.x);
+    const p1y = toCanvasY(state.ruler.p1.y);
+    canvasCtx.strokeStyle = 'rgba(229, 204, 143, 0.96)';
+    canvasCtx.fillStyle = 'rgba(229, 204, 143, 0.96)';
+    canvasCtx.lineWidth = Math.max(1.2, baseLineWidth * 1.5);
+    canvasCtx.setLineDash([7, 5]);
+
+    if (state.ruler.p2) {
+      const p2x = toCanvasX(state.ruler.p2.x);
+      const p2y = toCanvasY(state.ruler.p2.y);
+      canvasCtx.beginPath();
+      canvasCtx.moveTo(p1x, p1y);
+      canvasCtx.lineTo(p2x, p2y);
+      canvasCtx.stroke();
+
+      canvasCtx.setLineDash([]);
+      canvasCtx.beginPath();
+      canvasCtx.arc(p2x, p2y, 4.2, 0, TWO_PI);
+      canvasCtx.fill();
+
+      const dx = state.ruler.p2.x - state.ruler.p1.x;
+      const dy = state.ruler.p2.y - state.ruler.p1.y;
+      const dist = Math.hypot(dx, dy);
+      const mx = (p1x + p2x) * 0.5;
+      const my = (p1y + p2y) * 0.5;
+      canvasCtx.font = "12px 'IBM Plex Mono', monospace";
+      canvasCtx.fillStyle = 'rgba(238, 242, 249, 0.95)';
+      canvasCtx.fillText(`${formatNumber(dist, 1)} cm`, mx + 6, my - 6);
+    }
+
+    canvasCtx.setLineDash([]);
+    canvasCtx.fillStyle = 'rgba(229, 204, 143, 0.96)';
+    canvasCtx.beginPath();
+    canvasCtx.arc(p1x, p1y, 4.2, 0, TWO_PI);
+    canvasCtx.fill();
+  }
+
   if (state.probe.enabled) {
     const probePoint = mapPoint(state.probe.x, state.probe.y);
     canvasCtx.strokeStyle = 'rgba(255, 250, 181, 0.95)';
@@ -3030,6 +3144,7 @@ function animationLoop(time) {
   }
 
   updateProbeMetrics();
+  updateMeasureReadout();
   renderField();
   updateStatus();
   state.lastFrameTime = time;
@@ -3156,6 +3271,11 @@ function bindEvents() {
     state.showNodes = elements.showNodes.checked;
   });
 
+  elements.measureEnabled.addEventListener('change', () => {
+    state.ruler.enabled = elements.measureEnabled.checked;
+    updateMeasureReadout();
+  });
+
   elements.reducedMotion.addEventListener('change', () => {
     state.reducedMotion = elements.reducedMotion.checked;
   });
@@ -3205,10 +3325,11 @@ function bindEvents() {
     const handle = findEditHandleAtCanvas(pointer.canvasX, pointer.canvasY);
     const bodyRole = handle ? null : getPresetBodyDragRole(pointer.gridX, pointer.gridY);
     const probeHit = !handle && !bodyRole && isProbeHit(pointer.canvasX, pointer.canvasY);
+    const rulerHit = !handle && !bodyRole && !probeHit ? getRulerHandleHit(pointer.canvasX, pointer.canvasY) : null;
     state.hoveredHandleId = handle ? handle.id : null;
 
-    if (handle || bodyRole || probeHit) {
-      const role = handle ? handle.role : bodyRole || 'probe-move';
+    if (handle || bodyRole || probeHit || rulerHit) {
+      const role = handle ? handle.role : bodyRole || (probeHit ? 'probe-move' : rulerHit);
       const handleId = handle ? handle.id : role;
       state.drag = {
         pointerId: event.pointerId,
@@ -3226,6 +3347,12 @@ function bindEvents() {
       elements.tankCanvas.setPointerCapture(event.pointerId);
       elements.tankCanvas.style.cursor = 'grabbing';
       event.preventDefault();
+      return;
+    }
+
+    if (state.ruler.enabled) {
+      placeRulerPoint(pointer.gridX, pointer.gridY);
+      updateMeasureReadout();
       return;
     }
 
@@ -3263,6 +3390,18 @@ function bindEvents() {
         elements.tankCanvas.style.cursor = 'grabbing';
         return;
       }
+      if (state.drag.role === 'ruler-a') {
+        setRulerPoint('p1', pointer.gridX, pointer.gridY);
+        updateMeasureReadout();
+        elements.tankCanvas.style.cursor = 'grabbing';
+        return;
+      }
+      if (state.drag.role === 'ruler-b') {
+        setRulerPoint('p2', pointer.gridX, pointer.gridY);
+        updateMeasureReadout();
+        elements.tankCanvas.style.cursor = 'grabbing';
+        return;
+      }
       applyGeometryDrag(pointer.gridX, pointer.gridY);
       elements.tankCanvas.style.cursor = 'grabbing';
       return;
@@ -3271,8 +3410,10 @@ function bindEvents() {
     const handle = findEditHandleAtCanvas(pointer.canvasX, pointer.canvasY);
     const bodyRole = handle ? null : getPresetBodyDragRole(pointer.gridX, pointer.gridY);
     const probeHit = !handle && !bodyRole && isProbeHit(pointer.canvasX, pointer.canvasY);
+    const rulerHit = !handle && !bodyRole && !probeHit ? getRulerHandleHit(pointer.canvasX, pointer.canvasY) : null;
     state.hoveredHandleId = handle ? handle.id : null;
-    elements.tankCanvas.style.cursor = handle || bodyRole || probeHit ? 'grab' : state.probe.enabled ? 'cell' : 'crosshair';
+    elements.tankCanvas.style.cursor =
+      handle || bodyRole || probeHit || rulerHit ? 'grab' : state.probe.enabled || state.ruler.enabled ? 'cell' : 'crosshair';
   });
 
   const stopDrag = (event) => {
@@ -3292,8 +3433,10 @@ function bindEvents() {
     const handle = findEditHandleAtCanvas(pointer.canvasX, pointer.canvasY);
     const bodyRole = handle ? null : getPresetBodyDragRole(pointer.gridX, pointer.gridY);
     const probeHit = !handle && !bodyRole && isProbeHit(pointer.canvasX, pointer.canvasY);
+    const rulerHit = !handle && !bodyRole && !probeHit ? getRulerHandleHit(pointer.canvasX, pointer.canvasY) : null;
     state.hoveredHandleId = handle ? handle.id : null;
-    elements.tankCanvas.style.cursor = handle || bodyRole || probeHit ? 'grab' : state.probe.enabled ? 'cell' : 'crosshair';
+    elements.tankCanvas.style.cursor =
+      handle || bodyRole || probeHit || rulerHit ? 'grab' : state.probe.enabled || state.ruler.enabled ? 'cell' : 'crosshair';
   };
 
   elements.tankCanvas.addEventListener('pointerup', stopDrag);
