@@ -3038,39 +3038,83 @@ function renderOverlay(theme) {
   if (!is3D && state.ruler.enabled && state.ruler.p1) {
     const p1x = toCanvasX(state.ruler.p1.x);
     const p1y = toCanvasY(state.ruler.p1.y);
-    canvasCtx.strokeStyle = 'rgba(229, 204, 143, 0.96)';
-    canvasCtx.fillStyle = 'rgba(229, 204, 143, 0.96)';
-    canvasCtx.lineWidth = Math.max(1.2, baseLineWidth * 1.5);
-    canvasCtx.setLineDash([7, 5]);
+    const drawRulerHandle = (x, y, label) => {
+      canvasCtx.setLineDash([]);
+      canvasCtx.lineWidth = 2.6;
+      canvasCtx.fillStyle = 'rgba(4, 10, 16, 0.95)';
+      canvasCtx.strokeStyle = 'rgba(255, 210, 110, 0.98)';
+      canvasCtx.beginPath();
+      canvasCtx.arc(x, y, 8.2, 0, TWO_PI);
+      canvasCtx.fill();
+      canvasCtx.stroke();
+
+      canvasCtx.fillStyle = 'rgba(255, 232, 170, 0.98)';
+      canvasCtx.beginPath();
+      canvasCtx.arc(x, y, 3.7, 0, TWO_PI);
+      canvasCtx.fill();
+
+      if (label) {
+        canvasCtx.font = "700 12px 'IBM Plex Mono', monospace";
+        canvasCtx.fillStyle = 'rgba(255, 239, 196, 0.98)';
+        canvasCtx.fillText(label, x + 11, y - 10);
+      }
+    };
+
+    drawRulerHandle(p1x, p1y, state.ruler.p2 ? 'A' : null);
 
     if (state.ruler.p2) {
       const p2x = toCanvasX(state.ruler.p2.x);
       const p2y = toCanvasY(state.ruler.p2.y);
+
+      // High-contrast ruler line: soft glow under a sharp core stroke.
+      canvasCtx.setLineDash([]);
+      canvasCtx.lineWidth = Math.max(4.4, baseLineWidth * 5.6);
+      canvasCtx.strokeStyle = 'rgba(255, 164, 51, 0.46)';
       canvasCtx.beginPath();
       canvasCtx.moveTo(p1x, p1y);
       canvasCtx.lineTo(p2x, p2y);
       canvasCtx.stroke();
 
-      canvasCtx.setLineDash([]);
+      canvasCtx.lineWidth = Math.max(2.4, baseLineWidth * 3.1);
+      canvasCtx.strokeStyle = 'rgba(255, 228, 163, 0.99)';
       canvasCtx.beginPath();
-      canvasCtx.arc(p2x, p2y, 4.2, 0, TWO_PI);
-      canvasCtx.fill();
+      canvasCtx.moveTo(p1x, p1y);
+      canvasCtx.lineTo(p2x, p2y);
+      canvasCtx.stroke();
+
+      drawRulerHandle(p2x, p2y, 'B');
 
       const dx = state.ruler.p2.x - state.ruler.p1.x;
       const dy = state.ruler.p2.y - state.ruler.p1.y;
       const dist = Math.hypot(dx, dy);
       const mx = (p1x + p2x) * 0.5;
       const my = (p1y + p2y) * 0.5;
-      canvasCtx.font = "12px 'IBM Plex Mono', monospace";
-      canvasCtx.fillStyle = 'rgba(238, 242, 249, 0.95)';
-      canvasCtx.fillText(`${formatNumber(dist, 1)} cm`, mx + 6, my - 6);
-    }
+      const text = `${formatNumber(dist, 1)} cm`;
+      canvasCtx.font = "700 16px 'IBM Plex Mono', monospace";
+      const tw = canvasCtx.measureText(text).width;
+      const padX = 10;
+      const padY = 6;
+      const bx = mx - tw * 0.5 - padX;
+      const by = my - 30;
+      const bw = tw + padX * 2;
+      const bh = 24 + padY * 2;
 
-    canvasCtx.setLineDash([]);
-    canvasCtx.fillStyle = 'rgba(229, 204, 143, 0.96)';
-    canvasCtx.beginPath();
-    canvasCtx.arc(p1x, p1y, 4.2, 0, TWO_PI);
-    canvasCtx.fill();
+      canvasCtx.fillStyle = 'rgba(4, 11, 17, 0.93)';
+      canvasCtx.strokeStyle = 'rgba(255, 210, 110, 0.92)';
+      canvasCtx.lineWidth = 1.8;
+      canvasCtx.beginPath();
+      canvasCtx.rect(bx, by, bw, bh);
+      canvasCtx.fill();
+      canvasCtx.stroke();
+
+      canvasCtx.fillStyle = 'rgba(255, 240, 199, 0.99)';
+      canvasCtx.textBaseline = 'middle';
+      canvasCtx.fillText(text, bx + padX, by + bh * 0.5 + 1);
+    } else {
+      canvasCtx.font = "700 13px 'IBM Plex Mono', monospace";
+      canvasCtx.fillStyle = 'rgba(255, 235, 185, 0.97)';
+      canvasCtx.fillText('Set point B', p1x + 12, p1y + 15);
+    }
   }
 
   if (state.probe.enabled) {
