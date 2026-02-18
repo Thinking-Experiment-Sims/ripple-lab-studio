@@ -1624,7 +1624,7 @@ function addLineEditHandles(idPrefix, segment) {
   addEditHandle({ id: `${idPrefix}-move`, role: `${idPrefix}-move`, x: midpoint.x, y: midpoint.y });
 }
 
-function addAngleArc(center, fromVector, toVector, radius, style) {
+function addAngleArc(center, fromVector, toVector, radius, style, label = '') {
   const from = normalizeVector(fromVector);
   const to = normalizeVector(toVector);
   const start = Math.atan2(from.y, from.x);
@@ -1637,6 +1637,9 @@ function addAngleArc(center, fromVector, toVector, radius, style) {
     delta += TWO_PI;
   }
 
+  const mid = start + delta * 0.5;
+  const labelRadius = radius + 20;
+
   state.overlayArcs.push({
     x: center.x,
     y: center.y,
@@ -1644,7 +1647,11 @@ function addAngleArc(center, fromVector, toVector, radius, style) {
     startAngle: start,
     endAngle: start + delta,
     anticlockwise: delta < 0,
-    style
+    style,
+    label,
+    angleDeg: (Math.abs(delta) * 180) / Math.PI,
+    labelX: center.x + Math.cos(mid) * labelRadius,
+    labelY: center.y + Math.sin(mid) * labelRadius
   });
 }
 
@@ -1672,15 +1679,16 @@ function addReflectionRayAid(incidentOrigin, incidencePoint, normalVector, refle
     style: 'reflectedRay'
   });
   state.overlayLines.push({
-    x0: incidencePoint.x - normalFacing.x * 20,
-    y0: incidencePoint.y - normalFacing.y * 20,
-    x1: incidencePoint.x + normalFacing.x * 20,
-    y1: incidencePoint.y + normalFacing.y * 20,
+    x0: incidencePoint.x - normalFacing.x * 24,
+    y0: incidencePoint.y - normalFacing.y * 24,
+    x1: incidencePoint.x + normalFacing.x * 24,
+    y1: incidencePoint.y + normalFacing.y * 24,
     style: 'normalRay'
   });
+  state.overlayPoints.push({ x: incidencePoint.x, y: incidencePoint.y, style: 'rayPoint' });
 
-  addAngleArc(incidencePoint, normalFacing, incidentBack, 8, 'angleIncident');
-  addAngleArc(incidencePoint, normalFacing, reflected, 11, 'angleReflected');
+  addAngleArc(incidencePoint, normalFacing, incidentBack, 19, 'angleIncident', 'θi');
+  addAngleArc(incidencePoint, normalFacing, reflected, 26, 'angleReflected', 'θr');
 }
 
 function addRefractionRayAid(incidentOrigin, incidencePoint, normalToMedium2, speed1, speed2) {
@@ -1700,13 +1708,14 @@ function addRefractionRayAid(incidentOrigin, incidencePoint, normalToMedium2, sp
     style: 'incidentRay'
   });
   state.overlayLines.push({
-    x0: incidencePoint.x - normalToMedium2.x * 22,
-    y0: incidencePoint.y - normalToMedium2.y * 22,
-    x1: incidencePoint.x + normalToMedium2.x * 22,
-    y1: incidencePoint.y + normalToMedium2.y * 22,
+    x0: incidencePoint.x - normalToMedium2.x * 26,
+    y0: incidencePoint.y - normalToMedium2.y * 26,
+    x1: incidencePoint.x + normalToMedium2.x * 26,
+    y1: incidencePoint.y + normalToMedium2.y * 26,
     style: 'normalRay'
   });
-  addAngleArc(incidencePoint, normalIncSide, incidentBack, 8, 'angleIncident');
+  state.overlayPoints.push({ x: incidencePoint.x, y: incidencePoint.y, style: 'rayPoint' });
+  addAngleArc(incidencePoint, normalIncSide, incidentBack, 19, 'angleIncident', 'θi');
 
   if (transmitted) {
     state.overlayLines.push({
@@ -1716,7 +1725,7 @@ function addRefractionRayAid(incidentOrigin, incidencePoint, normalToMedium2, sp
       y1: incidencePoint.y + transmitted.y * 90,
       style: 'refractedRay'
     });
-    addAngleArc(incidencePoint, normalToMedium2, transmitted, 11, 'angleRefracted');
+    addAngleArc(incidencePoint, normalToMedium2, transmitted, 26, 'angleRefracted', 'θt');
   }
 }
 
@@ -2899,6 +2908,48 @@ function renderOverlay(theme) {
   canvasCtx.lineCap = 'round';
   canvasCtx.lineJoin = 'round';
   const baseLineWidth = Math.max(1, elements.tankCanvas.width / 430);
+  const drawLine = (p0, p1) => {
+    canvasCtx.beginPath();
+    canvasCtx.moveTo(p0.x, p0.y);
+    canvasCtx.lineTo(p1.x, p1.y);
+    canvasCtx.stroke();
+  };
+  const drawRayArrow = (p0, p1, color) => {
+    const dx = p1.x - p0.x;
+    const dy = p1.y - p0.y;
+    const length = Math.hypot(dx, dy);
+    if (length < 20) {
+      return;
+    }
+
+    const ux = dx / length;
+    const uy = dy / length;
+    const size = Math.max(9, baseLineWidth * 8.2);
+    const back = Math.max(2.5, baseLineWidth * 2.4);
+    const tipX = p1.x;
+    const tipY = p1.y;
+    const baseX = tipX - ux * (size + back);
+    const baseY = tipY - uy * (size + back);
+    const px = -uy;
+    const py = ux;
+    const wing = size * 0.44;
+
+    canvasCtx.fillStyle = 'rgba(7, 12, 19, 0.9)';
+    canvasCtx.beginPath();
+    canvasCtx.moveTo(tipX, tipY);
+    canvasCtx.lineTo(baseX + px * (wing + 1.5), baseY + py * (wing + 1.5));
+    canvasCtx.lineTo(baseX - px * (wing + 1.5), baseY - py * (wing + 1.5));
+    canvasCtx.closePath();
+    canvasCtx.fill();
+
+    canvasCtx.fillStyle = color;
+    canvasCtx.beginPath();
+    canvasCtx.moveTo(tipX, tipY);
+    canvasCtx.lineTo(baseX + px * wing, baseY + py * wing);
+    canvasCtx.lineTo(baseX - px * wing, baseY - py * wing);
+    canvasCtx.closePath();
+    canvasCtx.fill();
+  };
 
   for (let i = 0; i < state.overlayLines.length; i += 1) {
     const line = state.overlayLines[i];
@@ -2928,17 +2979,32 @@ function renderOverlay(theme) {
 
     canvasCtx.shadowBlur = 0;
     if (line.style === 'incidentRay' || line.style === 'reflectedRay' || line.style === 'refractedRay' || line.style === 'normalRay') {
-      canvasCtx.setLineDash(line.style === 'normalRay' ? [5, 4] : [8, 5]);
-      canvasCtx.lineWidth = baseLineWidth * 1.6;
-      if (line.style === 'incidentRay') {
-        canvasCtx.strokeStyle = 'rgba(229, 204, 143, 0.95)';
-      } else if (line.style === 'reflectedRay') {
-        canvasCtx.strokeStyle = 'rgba(126, 225, 215, 0.95)';
-      } else if (line.style === 'refractedRay') {
-        canvasCtx.strokeStyle = 'rgba(255, 198, 117, 0.95)';
-      } else {
-        canvasCtx.strokeStyle = 'rgba(231, 238, 244, 0.78)';
+      const colorByStyle = {
+        incidentRay: 'rgba(255, 232, 176, 0.99)',
+        reflectedRay: 'rgba(167, 248, 238, 0.99)',
+        refractedRay: 'rgba(255, 193, 102, 0.99)',
+        normalRay: 'rgba(233, 242, 250, 0.96)'
+      };
+      const coreWidth = line.style === 'normalRay' ? baseLineWidth * 2.2 : baseLineWidth * 3.05;
+      const haloWidth = line.style === 'normalRay' ? baseLineWidth * 4.3 : baseLineWidth * 5.35;
+      const dash = line.style === 'normalRay' ? [10, 7] : [];
+
+      canvasCtx.setLineDash(dash);
+      canvasCtx.lineWidth = haloWidth;
+      canvasCtx.strokeStyle = 'rgba(6, 10, 16, 0.96)';
+      drawLine(a, b);
+
+      canvasCtx.lineWidth = coreWidth;
+      canvasCtx.strokeStyle = colorByStyle[line.style];
+      canvasCtx.shadowColor = colorByStyle[line.style];
+      canvasCtx.shadowBlur = line.style === 'normalRay' ? (is3D ? 2 : 4) : is3D ? 5 : 9;
+      drawLine(a, b);
+      canvasCtx.shadowBlur = 0;
+
+      if (line.style !== 'normalRay') {
+        drawRayArrow(a, b, colorByStyle[line.style]);
       }
+      continue;
     } else if (line.style === 'guide') {
       canvasCtx.lineWidth = baseLineWidth * 1.2;
       canvasCtx.strokeStyle = 'rgba(229, 204, 143, 0.4)';
@@ -2955,22 +3021,121 @@ function renderOverlay(theme) {
 
   canvasCtx.setLineDash([]);
   if (!is3D) {
+    const placedAngleLabelBoxes = [];
     for (let i = 0; i < state.overlayArcs.length; i += 1) {
       const arc = state.overlayArcs[i];
       const centerX = toCanvasX(arc.x);
       const centerY = toCanvasY(arc.y);
       const radius = (arc.radius / GRID_WIDTH) * elements.tankCanvas.width;
-      canvasCtx.lineWidth = baseLineWidth * 1.5;
+      let arcColor = 'rgba(255, 232, 176, 0.98)';
       if (arc.style === 'angleRefracted') {
-        canvasCtx.strokeStyle = 'rgba(255, 198, 117, 0.92)';
+        arcColor = 'rgba(255, 193, 102, 0.98)';
       } else if (arc.style === 'angleReflected') {
-        canvasCtx.strokeStyle = 'rgba(126, 225, 215, 0.92)';
-      } else {
-        canvasCtx.strokeStyle = 'rgba(229, 204, 143, 0.92)';
+        arcColor = 'rgba(167, 248, 238, 0.98)';
       }
+
+      canvasCtx.lineWidth = baseLineWidth * 4.6;
+      canvasCtx.strokeStyle = 'rgba(6, 11, 18, 0.94)';
       canvasCtx.beginPath();
       canvasCtx.arc(centerX, centerY, radius, arc.startAngle, arc.endAngle, arc.anticlockwise);
       canvasCtx.stroke();
+
+      canvasCtx.lineWidth = baseLineWidth * 2.7;
+      canvasCtx.strokeStyle = arcColor;
+      canvasCtx.shadowColor = arcColor;
+      canvasCtx.shadowBlur = 7;
+      canvasCtx.beginPath();
+      canvasCtx.arc(centerX, centerY, radius, arc.startAngle, arc.endAngle, arc.anticlockwise);
+      canvasCtx.stroke();
+      canvasCtx.shadowBlur = 0;
+
+      if (arc.label) {
+        const lx = toCanvasX(arc.labelX);
+        const ly = toCanvasY(arc.labelY);
+        const angleText = Number.isFinite(arc.angleDeg) ? `${arc.label} ${formatNumber(arc.angleDeg, 1)}°` : arc.label;
+        canvasCtx.font = "800 24px 'IBM Plex Sans', sans-serif";
+        canvasCtx.textAlign = 'center';
+        canvasCtx.textBaseline = 'middle';
+        const tw = canvasCtx.measureText(angleText).width;
+        const padX = 12;
+        const padY = 8;
+        const bw = tw + padX * 2;
+        const bh = 30 + padY * 2;
+        const radiusLabel = 8;
+        const margin = 16;
+        const halfW = bw * 0.5;
+        const halfH = bh * 0.5;
+
+        let labelCx = lx;
+        let labelCy = ly;
+        let vx = labelCx - centerX;
+        let vy = labelCy - centerY;
+        let distanceToCenter = Math.hypot(vx, vy);
+        if (distanceToCenter < 0.0001) {
+          vx = 0;
+          vy = -1;
+          distanceToCenter = 1;
+        }
+        const ux = vx / distanceToCenter;
+        const uy = vy / distanceToCenter;
+        const minDistance = radius + Math.max(46, bh * 0.9);
+        if (distanceToCenter < minDistance) {
+          labelCx = centerX + ux * minDistance;
+          labelCy = centerY + uy * minDistance;
+        }
+
+        const maxX = elements.tankCanvas.width - margin - halfW;
+        const minX = margin + halfW;
+        const maxY = elements.tankCanvas.height - margin - halfH;
+        const minY = margin + halfH;
+        labelCx = clamp(labelCx, minX, maxX);
+        labelCy = clamp(labelCy, minY, maxY);
+
+        for (let attempt = 0; attempt < 6; attempt += 1) {
+          const bxTry = labelCx - halfW;
+          const byTry = labelCy - halfH;
+          const overlaps = placedAngleLabelBoxes.some(
+            (box) =>
+              bxTry < box.x + box.w &&
+              bxTry + bw > box.x &&
+              byTry < box.y + box.h &&
+              byTry + bh > box.y
+          );
+          if (!overlaps) {
+            break;
+          }
+          const shift = bh + 12;
+          labelCx += -uy * shift;
+          labelCy += ux * shift;
+          labelCx = clamp(labelCx, minX, maxX);
+          labelCy = clamp(labelCy, minY, maxY);
+        }
+
+        const bx = labelCx - halfW;
+        const by = labelCy - halfH;
+        placedAngleLabelBoxes.push({ x: bx, y: by, w: bw, h: bh });
+
+        canvasCtx.fillStyle = 'rgba(5, 12, 18, 0.92)';
+        canvasCtx.strokeStyle = arcColor;
+        canvasCtx.lineWidth = 1.8;
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(bx + radiusLabel, by);
+        canvasCtx.lineTo(bx + bw - radiusLabel, by);
+        canvasCtx.quadraticCurveTo(bx + bw, by, bx + bw, by + radiusLabel);
+        canvasCtx.lineTo(bx + bw, by + bh - radiusLabel);
+        canvasCtx.quadraticCurveTo(bx + bw, by + bh, bx + bw - radiusLabel, by + bh);
+        canvasCtx.lineTo(bx + radiusLabel, by + bh);
+        canvasCtx.quadraticCurveTo(bx, by + bh, bx, by + bh - radiusLabel);
+        canvasCtx.lineTo(bx, by + radiusLabel);
+        canvasCtx.quadraticCurveTo(bx, by, bx + radiusLabel, by);
+        canvasCtx.closePath();
+        canvasCtx.fill();
+        canvasCtx.stroke();
+
+        canvasCtx.fillStyle = 'rgba(248, 252, 255, 0.99)';
+        canvasCtx.fillText(angleText, labelCx, labelCy + 0.5);
+        canvasCtx.textAlign = 'left';
+      }
     }
   }
 
@@ -3033,6 +3198,22 @@ function renderOverlay(theme) {
       canvasCtx.moveTo(x, y - 6);
       canvasCtx.lineTo(x, y + 6);
       canvasCtx.stroke();
+    } else if (point.style === 'rayPoint') {
+      canvasCtx.fillStyle = 'rgba(6, 11, 17, 0.95)';
+      canvasCtx.beginPath();
+      canvasCtx.arc(x, y, 6.2, 0, TWO_PI);
+      canvasCtx.fill();
+
+      canvasCtx.strokeStyle = 'rgba(255, 216, 129, 0.98)';
+      canvasCtx.lineWidth = 2.2;
+      canvasCtx.beginPath();
+      canvasCtx.arc(x, y, 5.2, 0, TWO_PI);
+      canvasCtx.stroke();
+
+      canvasCtx.fillStyle = 'rgba(255, 245, 211, 0.98)';
+      canvasCtx.beginPath();
+      canvasCtx.arc(x, y, 2.4, 0, TWO_PI);
+      canvasCtx.fill();
     } else {
       canvasCtx.fillStyle = theme.point;
       canvasCtx.beginPath();
