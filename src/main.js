@@ -2477,6 +2477,12 @@ function applyPreset(presetId) {
   elements.showRayAid.checked = state.showRayAid;
   state.viewMode = defaults.viewMode || 'top';
   state.focusSourceMode = false;
+  // Keep ruler toggle state across presets, but reset measurement points so
+  // each setup starts with a clean measurement.
+  state.ruler.p1 = null;
+  state.ruler.p2 = null;
+  elements.measureEnabled.checked = state.ruler.enabled;
+  updateMeasureReadout();
   elements.focusSourceBtn.classList.remove('is-active');
   elements.focusSourceBtn.textContent = 'Use Focus Source';
 
