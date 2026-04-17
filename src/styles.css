@@ -1,6 +1,17 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@400;600;700&display=swap');
 
 :root {
+  --bg-950: #e9f4fb;
+  --bg-900: #fff4dd;
+  --bg-800: #ffffff;
+  --text-100: #123140;
+  --text-300: #4b6570;
+  --gold-500: #0f7e9b;
+  --gold-400: #0b5f77;
+  --surface: rgba(255, 255, 255, 0.96);
+  --border: #c8dbe3;
+  --shadow-lg: 0 12px 24px rgba(12, 54, 68, 0.12);
+
   --bg-0: #061923;
   --bg-1: #0b2f3a;
   --bg-2: #194c58;
@@ -103,10 +114,10 @@ h1 {
 
 .panel {
   border: 1px solid var(--panel-edge);
-  background: var(--panel);
+  background: var(--surface);
   backdrop-filter: blur(10px);
-  box-shadow: 0 14px 34px var(--shadow);
-  border-radius: 18px;
+  box-shadow: 0 6px 16px rgba(12, 54, 68, 0.08);
+  border-radius: 12px;
   padding: 1rem;
   animation: panel-in 0.52s ease-out both;
 }
@@ -206,6 +217,11 @@ textarea {
 }
 
 button {
+  border-radius: 10px;
+  background: linear-gradient(160deg, #0d839f, #0b5f77);
+  color: #ffffff;
+  font-weight: 700;
+
   cursor: pointer;
   padding: 0.56rem 0.72rem;
   font-weight: 600;
