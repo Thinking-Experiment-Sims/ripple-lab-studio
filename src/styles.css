@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@400;600;700&display=swap');
 
 :root {
+
   --bg-950: #e9f4fb;
   --bg-900: #fff4dd;
   --bg-800: #ffffff;
@@ -23,6 +24,7 @@
   --accent-2: #7ee1d7;
   --danger: #ff7d6e;
   --shadow: rgba(0, 0, 0, 0.28);
+
 }
 
 * {
@@ -30,15 +32,10 @@
 }
 
 body {
-  margin: 0;
-  min-height: 100vh;
-  font-family: 'Sora', 'Avenir Next', sans-serif;
-  color: var(--text);
-  background:
-    radial-gradient(circle at 15% 20%, #19495a 0%, transparent 48%),
-    radial-gradient(circle at 80% 10%, #2c5f56 0%, transparent 44%),
-    linear-gradient(140deg, var(--bg-0) 0%, var(--bg-1) 42%, var(--bg-2) 100%);
-  overflow-x: hidden;
+  font-family: "Inter", "IBM Plex Sans", sans-serif;
+  color: var(--text-100);
+  background: #e9f4fb;
+  line-height: 1.45;
 }
 
 .bg-shape {
@@ -113,13 +110,11 @@ h1 {
 }
 
 .panel {
-  border: 1px solid var(--panel-edge);
-  background: var(--surface);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 6px 16px rgba(12, 54, 68, 0.08);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 1rem;
-  animation: panel-in 0.52s ease-out both;
+  background: var(--surface);
+  box-shadow: 0 6px 16px rgba(12, 54, 68, 0.08);
 }
 
 .panel section {
@@ -221,11 +216,9 @@ button {
   background: linear-gradient(160deg, #0d839f, #0b5f77);
   color: #ffffff;
   font-weight: 700;
-
+  border: 1px solid #0a5d74;
+  padding: 0.58rem 0.82rem;
   cursor: pointer;
-  padding: 0.56rem 0.72rem;
-  font-weight: 600;
-  transition: transform 120ms ease, border-color 120ms ease, background-color 120ms ease;
 }
 
 button:hover {
