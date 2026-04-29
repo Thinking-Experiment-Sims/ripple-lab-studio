@@ -1,30 +1,27 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@400;600;700&display=swap');
 
 :root {
-
+  /* Official Thinking Experiment Light Mode Tokens */
   --bg-950: #e9f4fb;
   --bg-900: #fff4dd;
-  --bg-800: #ffffff;
+  --bg-800: #f9fcfe;
   --text-100: #123140;
   --text-300: #4b6570;
-  --gold-500: #0f7e9b;
-  --gold-400: #0b5f77;
-  --surface: rgba(255, 255, 255, 0.96);
-  --border: #c8dbe3;
-  --shadow-lg: 0 12px 24px rgba(12, 54, 68, 0.12);
+  --text-500: #6c8691;
+  --accent: #0f7e9b;
+  --accent-strong: #095f76;
+  --surface: #ffffff;
+  --border: #b4d0db;
+  --shadow-lg: 0 12px 24px rgba(12, 54, 68, 0.1);
 
-  --bg-0: #061923;
-  --bg-1: #0b2f3a;
-  --bg-2: #194c58;
-  --panel: rgba(5, 20, 28, 0.78);
-  --panel-edge: rgba(157, 228, 255, 0.24);
-  --text: #e8f3f8;
-  --muted: #97b7c2;
-  --accent: #f7b267;
-  --accent-2: #7ee1d7;
-  --danger: #ff7d6e;
-  --shadow: rgba(0, 0, 0, 0.28);
-
+  /* Functional UI Mappings */
+  --panel: rgba(255, 255, 255, 0.94);
+  --panel-edge: rgba(15, 126, 155, 0.12);
+  --text: var(--text-100);
+  --muted: var(--text-300);
+  --accent-2: var(--accent-strong);
+  --danger: #d94a38;
+  --shadow: rgba(12, 54, 68, 0.08);
 }
 
 * {
@@ -52,7 +49,8 @@ body {
   height: 28rem;
   top: -8rem;
   right: -6rem;
-  background: #f7b267;
+  background: var(--accent);
+  opacity: 0.12;
 }
 
 .bg-shape-2 {
@@ -60,7 +58,8 @@ body {
   height: 22rem;
   bottom: -7rem;
   left: -4rem;
-  background: #7ee1d7;
+  background: var(--bg-900);
+  opacity: 0.3;
 }
 
 .shell {
@@ -86,7 +85,7 @@ body {
   inset: 0 auto 0 0;
   width: 12px;
   border-radius: 14px 0 0 14px;
-  background: var(--gold-500);
+  background: var(--accent);
 }
 
 .hero-top {
@@ -106,7 +105,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   font-size: 0.8rem;
-  color: var(--gold-400);
+  color: var(--accent-strong);
   font-weight: 700;
 }
 
@@ -177,8 +176,10 @@ h2 {
   font-size: 0.92rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--accent-2);
+  color: var(--accent-strong);
   margin-bottom: 0.65rem;
+  border-bottom: 1px solid var(--panel-edge);
+  padding-bottom: 0.25rem;
 }
 
 h3 {
@@ -194,10 +195,11 @@ h3 {
 
 .field span {
   font-size: 0.84rem;
-  color: var(--muted);
+  color: var(--text-300);
   display: flex;
   justify-content: space-between;
   gap: 0.6rem;
+  font-weight: 600;
 }
 
 .field strong {
@@ -211,20 +213,23 @@ button,
 input,
 textarea {
   font: inherit;
-  color: inherit;
+  color: var(--text-100);
 }
 
 select,
 button,
 textarea {
   border-radius: 10px;
-  border: 1px solid rgba(147, 204, 218, 0.36);
-  background: rgba(5, 34, 44, 0.78);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-100);
 }
 
 select,
 textarea {
   padding: 0.52rem 0.65rem;
+  background: #ffffff;
+  color: #123140 !important;
 }
 
 textarea {
@@ -246,9 +251,10 @@ button {
   background: linear-gradient(160deg, #0d839f, #0b5f77);
   color: #ffffff;
   font-weight: 700;
-  border: 1px solid #0a5d74;
+  border: 1px solid #095f76;
   padding: 0.58rem 0.82rem;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 button:hover {
@@ -261,22 +267,25 @@ button:active {
 }
 
 #playBtn {
-  background: rgba(247, 178, 103, 0.18);
+  background: var(--accent);
+  color: #ffffff;
 }
 
 #clearBtn,
 #resetBtn {
-  background: rgba(126, 225, 215, 0.13);
+  background: var(--accent-strong);
+  color: #ffffff;
 }
 
 #saveScreenshotBtn,
 #saveReportBtn {
-  background: rgba(247, 178, 103, 0.16);
+  background: var(--accent-strong);
+  color: #ffffff;
 }
 
 #focusSourceBtn.is-active {
-  background: rgba(255, 125, 110, 0.2);
-  border-color: rgba(255, 125, 110, 0.72);
+  background: var(--danger);
+  border-color: var(--danger);
 }
 
 input[type='range'] {
@@ -335,6 +344,8 @@ input[type='range'] {
   padding: 0.33rem 0.52rem;
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.75rem;
+  color: #ffffff;
+  pointer-events: none;
 }
 
 .guide p,
@@ -361,17 +372,18 @@ input[type='range'] {
 }
 
 .worksheet-section {
-  border: 1px solid rgba(157, 228, 255, 0.18);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 0.55rem 0.6rem;
-  background: rgba(3, 22, 30, 0.34);
+  background: var(--bg-800);
 }
 
 .worksheet-section h4 {
   margin: 0 0 0.4rem;
   font-size: 0.84rem;
-  color: var(--accent-2);
+  color: var(--accent-strong);
   letter-spacing: 0.03em;
+  font-weight: 700;
 }
 
 .worksheet-question {
